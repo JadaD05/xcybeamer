@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./xcy_api_server
+      dockerfile: Dockerfile
+    container_name: xcy-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongo
+    networks:
+      - xcy-network
+
+  frontend:
+    build:
+      context: ./XCY
+      dockerfile: Dockerfile
+    container_name: xcy-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - xcy-network
+
+  mongo:
+    image: mongo:7
+    container_name: xcy-mongo
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_DATABASE=xcy-beamer
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro # For init scripts
+    ports:
+      - "27017:27017"
+    networks:
+      - xcy-network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: xcy-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - xcy-network
+
+volumes:
+  mongo_data:
+    driver: local
+
+networks:
+  xcy-network:
+    driver: bridge
