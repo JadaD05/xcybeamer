@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
 import { Shield, Zap, Users, Star, Menu, X, ChevronRight, Gamepad2, CheckCircle } from 'lucide-react';
-import { isAuthenticated, getUser, logout } from '../utils/auth';
+import { isAuthenticated, getUser, logout, isAdmin } from '../utils/auth';
 
 export default function Home() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -18,7 +18,8 @@ export default function Home() {
 
     useEffect(() => {
         if (isAuthenticated()) {
-            setUser(getUser());
+            const u = getUser();
+            setUser({ ...u, isAdmin: u.role === 'admin' });
         }
     }, []);
 
@@ -51,31 +52,12 @@ export default function Home() {
     ];
 
     const games = [
-        { name: "Valorant", status: "Active", users: "2.5k" },
-        { name: "CS2", status: "Active", users: "3.2k" },
-        { name: "Apex Legends", status: "Active", users: "1.8k" },
-        { name: "Fortnite", status: "Active", users: "4.1k" },
-        { name: "Call of Duty", status: "Active", users: "2.9k" },
-        { name: "Rust", status: "Active", users: "1.5k" }
-    ];
-
-    const plans = [
-        {
-            name: "Starter",
-            price: "14.99",
-            features: ["1 Game Access", "Basic Features", "Email Support", "Weekly Updates"]
-        },
-        {
-            name: "Pro",
-            price: "29.99",
-            popular: true,
-            features: ["3 Games Access", "All Features", "Priority Support", "Daily Updates", "VIP Discord Role"]
-        },
-        {
-            name: "Elite",
-            price: "49.99",
-            features: ["Unlimited Games", "Premium Features", "24/7 Support", "Instant Updates", "Private Channel", "Custom Configs"]
-        }
+        { name: "Valorant", status: "Undetected", users: "2.5k" },
+        { name: "CS2", status: "Undetected", users: "3.2k" },
+        { name: "Apex Legends", status: "Undetected", users: "1.8k" },
+        { name: "Fortnite", status: "Undetected", users: "4.1k" },
+        { name: "Call of Duty", status: "Undetected", users: "2.9k" },
+        { name: "Rust", status: "Undetected", users: "1.5k" }
     ];
 
     return (
@@ -93,10 +75,16 @@ export default function Home() {
 
                         {/* Desktop Menu */}
                         <div className="hidden md:flex space-x-8">
-                            <a href="#home" className="hover:text-blue-400 transition">Home</a>
+                            <a href="/" className="hover:text-blue-400 transition">Home</a>
                             <a href="/products" className="hover:text-blue-400 transition">Products</a>
+                            <a href="/status" className="hover:text-blue-400 transition">Status</a>
                             <a href="/support" className="hover:text-blue-400 transition">Support</a>
-                            <a href="/client" className="hover:text-blue-400 transition">Client</a>
+                            <Link
+                                to={user?.isAdmin ? "/admin" : "/client"}
+                                className="hover:text-blue-400 transition"
+                            >
+                                {user?.isAdmin ? "Admin" : "Client"}
+                            </Link>
                         </div>
 
                         <div className="hidden md:block">
@@ -142,9 +130,16 @@ export default function Home() {
                 {isMenuOpen && (
                     <div className="md:hidden bg-gray-900 border-t border-gray-800">
                         <div className="px-4 py-4 space-y-3">
-                            <a href="#home" className="block hover:text-blue-400 transition">Home</a>
-                            <Link to="/products" className="block hover:text-blue-400 transition">Products</Link>
+                            <a href="/" className="block hover:text-blue-400 transition">Home</a>
+                            <Link to="/products" className="block hover:text-blue-400 transition">Products</Link>\
+                            <a href="/status" className="hover:text-blue-400 transition">Status</a>
                             <a href="/support" className="hover:text-blue-400 transition">Support</a>
+                            <Link
+                                to={user?.isAdmin ? "/admin" : "/client"}
+                                className="hover:text-blue-400 transition"
+                            >
+                                {user?.isAdmin ? "Admin" : "Client"}
+                            </Link>
                             {user ? (
                                 <>
                                     <p className="text-gray-400">Welcome, {user.username}!</p>
@@ -194,7 +189,7 @@ export default function Home() {
                 {/* Content */}
                 <div className="max-w-7xl mx-auto text-center relative z-10">
                     <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-blue-400 via-green-500 to-blue-600 bg-clip-text text-transparent">
-                        {user ? `Welcome Back, ${user.username}!` : 'Elevate Your Gaming'}
+                        {user ? `Welcome, ${user.username}!` : 'Elevate Your Gaming'}
                     </h1>
                     <p className="text-xl md:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto">
                         {user

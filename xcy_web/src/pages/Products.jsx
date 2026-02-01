@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Gamepad2, Shield, Zap, Users, Star, Search, Filter, ChevronRight, Check } from 'lucide-react';
+import { Gamepad2, Shield, Zap, Users, Star, Search, Filter, ChevronRight, Check, ShoppingCart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { isAuthenticated, getUser, logout } from '../utils/auth';
-import { handleCheckout } from '../utils/stripe';
+import { useCart } from '../context/CartContext';
 import axios from 'axios';
 
 export default function Products() {
@@ -10,8 +10,16 @@ export default function Products() {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const user = isAuthenticated() ? getUser() : null;
+    const [user, setUser] = useState(null);
     const [categories, setCategories] = useState([]);
+    const { addToCart, getCartCount } = useCart();
+
+    useEffect(() => {
+        if (isAuthenticated()) {
+            const u = getUser();
+            setUser({ ...u, isAdmin: u.role === 'admin' }); // add isAdmin property
+        }
+    }, []);
 
     // Fetch products from database
     useEffect(() => {
@@ -54,6 +62,16 @@ export default function Products() {
         logout();
     };
 
+    const handleAddToCart = (e, product) => {
+        e.preventDefault(); // Prevent navigation
+        const result = addToCart(product);
+        if (result.success) {
+            alert('✅ Added to cart!');
+        } else {
+            alert(result.message);
+        }
+    };
+
     return (
         <div className="min-h-screen w-full bg-gray-950 text-white overflow-x-hidden">
             {/* Navigation */}
@@ -70,11 +88,27 @@ export default function Products() {
                         <div className="hidden md:flex space-x-8">
                             <Link to="/" className="hover:text-blue-400 transition">Home</Link>
                             <Link to="/products" className="text-blue-400">Products</Link>
+                            <Link to="/status" className="hover:text-blue-400 transition">Status</Link>
                             <Link to="/support" className="hover:text-blue-400 transition">Support</Link>
-                            <Link to="/client" className="hover:text-blue-400 transition">Client</Link>
+                            <Link
+                                to={user?.isAdmin ? "/admin" : "/client"}
+                                className="hover:text-blue-400 transition"
+                            >
+                                {user?.isAdmin ? "Admin" : "Client"}
+                            </Link>
                         </div>
 
-                        <div className="hidden md:block">
+                        <div className="hidden md:flex items-center gap-4">
+                            {/* Cart Icon */}
+                            <Link to="/cart" className="relative">
+                                <ShoppingCart className="w-6 h-6 text-gray-300 hover:text-blue-400 transition" />
+                                {getCartCount() > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {getCartCount()}
+                                    </span>
+                                )}
+                            </Link>
+
                             {user ? (
                                 <div className="flex items-center gap-4">
                                     <span className="text-gray-300">Welcome, <span className="font-semibold text-blue-400">{user.username}</span>!</span>
@@ -140,17 +174,32 @@ export default function Products() {
                                     <button
                                         key={category._id}
                                         onClick={() => setSelectedGame(category.game)}
-                                        className="bg-gray-800/50 border border-gray-700 hover:border-blue-500 p-6 rounded-xl text-left transition group"
+                                        className="relative bg-gray-800/50 border border-gray-700 hover:border-blue-500 rounded-xl overflow-hidden transition group"
                                     >
+                                        {/* Image dictates the card size */}
                                         {category.image && (
-                                            <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">
-                                                {category.image}
-                                            </div>
+                                            category.image.startsWith('http') || category.image.endsWith('.jpg') || category.image.endsWith('.png') ? (
+                                                <img
+                                                    src={category.image}
+                                                    className="w-full h-auto brightness-50 group-hover:brightness-75 transition"
+                                                />
+                                            ) : (
+                                                <div className="flex items-center justify-center text-8xl py-16 opacity-30 group-hover:opacity-40 transition">
+                                                    {category.image}
+                                                </div>
+                                            )
                                         )}
-                                        <h3 className="text-xl font-bold">{category.game}</h3>
-                                        <p className="text-gray-400 text-sm mt-1">
-                                            {category.name}
-                                        </p>
+
+                                        {/* Gradient Overlay */}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none" />
+
+                                        {/* Text Content */}
+                                        <div className="absolute bottom-0 left-0 right-0 p-6 text-left">
+                                            <h3 className="text-2xl font-bold text-white mb-1 drop-shadow-lg">{category.game}</h3>
+                                            <p className="text-gray-200 text-sm drop-shadow-lg">
+                                                {category.name}
+                                            </p>
+                                        </div>
                                     </button>
                                 ))}
                             </div>
@@ -182,136 +231,92 @@ export default function Products() {
                                         className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl border border-gray-700 hover:border-blue-500 transition-all duration-300 overflow-hidden group"
                                     >
                                         {/* Product Image/Icon */}
-                                        <div className="bg-gradient-to-br from-blue-900/30 to-green-900/30 p-4 text-center">
-                                            {typeof product.image === "string" && (product.image.startsWith("http") || product.image.endsWith(".jpg") || product.image.endsWith(".png")) ? (
-                                                <img
-                                                    src={product.image}
-                                                    alt={product.name}
-                                                    className="w-full h-38 object-cover rounded-lg mb-2"
-                                                />
-                                            ) : (
-                                                <div className="text-6xl mb-2">{product.image}</div>
-                                            )}
+                                        <Link to={`/products/${product._id}`}>
+                                            <div className="bg-gradient-to-br from-blue-900/30 to-green-900/30 p-4 text-center">
+                                                {typeof product.image === "string" && (product.image.startsWith("http") || product.image.endsWith(".jpg") || product.image.endsWith(".png")) ? (
+                                                    <img
+                                                        src={product.image}
+                                                        alt={product.name}
+                                                        className="w-full h-38 object-cover rounded-lg mb-2"
+                                                    />
+                                                ) : (
+                                                    <div className="text-6xl mb-2">{product.image}</div>
+                                                )}
 
-                                            <div className="flex items-center justify-center gap-1 text-green-400 text-sm">
-                                                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                                                {product.status}
+                                                <div className="flex items-center justify-center gap-1 text-green-400 text-sm">
+                                                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                                    {product.status}
+                                                </div>
                                             </div>
-                                        </div>
+                                        </Link>
 
                                         {/* Product Info */}
                                         <div className="p-6">
-                                            <div className="flex items-start justify-between mb-2">
-                                                <div>
-                                                    <h3 className="text-xl font-bold mb-1">{product.name}</h3>
-                                                    <p className="text-gray-400 text-sm">{product.game}</p>
+                                            <Link to={`/products/${product._id}`}>
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <div>
+                                                        <h3 className="text-xl font-bold mb-1">{product.name}</h3>
+                                                        <p className="text-gray-400 text-sm">{product.game}</p>
+                                                    </div>
+                                                    <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-xs font-semibold">
+                                                        {product.category}
+                                                    </span>
                                                 </div>
-                                                <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-xs font-semibold">
-                                                    {product.category}
-                                                </span>
-                                            </div>
 
-                                            {/* Rating & Users */}
-                                            <div className="flex items-center gap-4 mb-4 text-sm">
-                                                <div className="flex items-center gap-1 text-yellow-400">
-                                                    <Star className="w-4 h-4 fill-current" />
-                                                    <span className="font-semibold">{product.rating}</span>
+                                                {/* Rating & Users */}
+                                                <div className="flex items-center gap-4 mb-4 text-sm">
+                                                    <div className="flex items-center gap-1 text-yellow-400">
+                                                        <Star className="w-4 h-4 fill-current" />
+                                                        <span className="font-semibold">{product.rating}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-gray-400">
+                                                        <Users className="w-4 h-4" />
+                                                        <span>{product.users} users</span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-1 text-gray-400">
-                                                    <Users className="w-4 h-4" />
-                                                    <span>{product.users} users</span>
-                                                </div>
-                                            </div>
 
-                                            {/* Features */}
-                                            <div className="mb-4">
-                                                <p className="text-xs text-gray-400 mb-2 font-semibold">FEATURES</p>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {product.features.slice(0, 3).map((feature, idx) => (
-                                                        <span
-                                                            key={idx}
-                                                            className="bg-gray-800 text-gray-300 px-2 py-1 rounded text-xs"
-                                                        >
-                                                            {feature}
-                                                        </span>
-                                                    ))}
-                                                    {product.features.length > 3 && (
-                                                        <span className="bg-gray-800 text-gray-400 px-2 py-1 rounded text-xs">
-                                                            +{product.features.length - 3} more
-                                                        </span>
-                                                    )}
+                                                {/* Features */}
+                                                <div className="mb-4">
+                                                    <p className="text-xs text-gray-400 mb-2 font-semibold">FEATURES</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {product.features.slice(0, 3).map((feature, idx) => (
+                                                            <span
+                                                                key={idx}
+                                                                className="bg-gray-800 text-gray-300 px-2 py-1 rounded text-xs"
+                                                            >
+                                                                {feature}
+                                                            </span>
+                                                        ))}
+                                                        {product.features.length > 3 && (
+                                                            <span className="bg-gray-800 text-gray-400 px-2 py-1 rounded text-xs">
+                                                                +{product.features.length - 3} more
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            </Link>
 
-                                            {/* Price & Button */}
-                                            <div className="flex items-center justify-between pt-4 border-t border-gray-700">
-                                                <div>
+                                            {/* Price & Buttons */}
+                                            <div className="pt-4 border-t border-gray-700">
+                                                <div className="flex items-center justify-between mb-3">
                                                     <span className="text-2xl font-bold">${product.price}</span>
                                                 </div>
 
-                                                {/* Buy Button */}
-                                                <button
-                                                    onClick={async () => {
-                                                        if (!user?.token) {
-                                                            alert('Please sign in to purchase');
-                                                            return;
-                                                        }
-
-                                                        try {
-                                                            // Check if keys are available first
-                                                            const keyCheck = await axios.get(
-                                                                `${import.meta.env.VITE_API_URL}/product-keys/${product._id}/available`
-                                                            );
-
-                                                            if (!keyCheck.data.success || keyCheck.data.availableKeys < 1) {
-                                                                alert('Sorry, this product is currently out of stock.');
-                                                                return;
-                                                            }
-
-                                                            // Prepare payload
-                                                            const payload = {
-                                                                items: [
-                                                                    {
-                                                                        productId: product._id,
-                                                                        name: product.name,
-                                                                        price: parseFloat(product.price),
-                                                                        quantity: 1,
-                                                                        image: typeof product.image === 'string' ? product.image : ''
-                                                                    }
-                                                                ],
-                                                                userEmail: user.email
-                                                            };
-
-                                                            const res = await axios.post(
-                                                                `${import.meta.env.VITE_API_URL}/payments/create-session`,
-                                                                payload,
-                                                                {
-                                                                    headers: {
-                                                                        'Content-Type': 'application/json',
-                                                                        Authorization: `Bearer ${user.token}`
-                                                                    }
-                                                                }
-                                                            );
-
-                                                            const data = res.data;
-
-                                                            if (!data.success) {
-                                                                alert(data.message || 'Failed to start checkout');
-                                                                return;
-                                                            }
-
-                                                            // Redirect to Stripe checkout
-                                                            window.location.href = data.url;
-
-                                                        } catch (err) {
-                                                            console.error('Buy button error:', err);
-                                                            alert(err.response?.data?.message || err.message || 'Error starting checkout.');
-                                                        }
-                                                    }}
-                                                    className="bg-gradient-to-r from-blue-600 to-green-600 px-4 py-2 rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 transition flex items-center gap-2 group-hover:gap-3"
-                                                >
-                                                    Buy <ChevronRight className="w-4 h-4" />
-                                                </button>
+                                                <div className="flex gap-2">
+                                                    <Link
+                                                        to={`/products/${product._id}`}
+                                                        className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg font-semibold transition text-center"
+                                                    >
+                                                        View
+                                                    </Link>
+                                                    <button
+                                                        onClick={(e) => handleAddToCart(e, product)}
+                                                        className="flex-1 bg-gradient-to-r from-blue-600 to-green-600 px-4 py-2 rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 transition flex items-center justify-center gap-2"
+                                                    >
+                                                        <ShoppingCart className="w-4 h-4" />
+                                                        Add
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -320,11 +325,11 @@ export default function Products() {
                         )}
 
                         {/* No Results */}
-                        {!loading && !error && selectedGame.length === 0 && (
+                        {!loading && !error && gameProducts.length === 0 && (
                             <div className="text-center py-20">
                                 <div className="text-6xl mb-4">🔍</div>
                                 <h3 className="text-2xl font-bold mb-2">No products found</h3>
-                                <p className="text-gray-400">Try adjusting your search or filter criteria</p>
+                                <p className="text-gray-400">Try selecting a different game</p>
                             </div>
                         )}
                     </div>

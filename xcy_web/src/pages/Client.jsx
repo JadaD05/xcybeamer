@@ -98,6 +98,8 @@ export default function Client() {
                         <div className="hidden md:flex space-x-8">
                             <Link to="/" className="hover:text-blue-400 transition">Home</Link>
                             <Link to="/products" className="hover:text-blue-400 transition">Products</Link>
+                            <Link to="/status" className="hover:text-blue-400 transition">Status</Link>
+                            <Link to="/support" className="hover:text-blue-400 transition">Support</Link>
                             <Link to="/client" className="text-blue-400">Client</Link>
                         </div>
 

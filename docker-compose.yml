@@ -16,7 +16,7 @@ services:
 
   frontend:
     build:
-      context: ./XCY
+      context: ./xcy_web
       dockerfile: Dockerfile
     container_name: xcy-frontend
     restart: unless-stopped

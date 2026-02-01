@@ -1,34 +1,39 @@
-const express = require('express');
+const express = require("express");
+const Order = require("../models/Order"); // adjust path if needed
+
 const router = express.Router();
-const Product = require('../models/Product');
 
-async function getAllProductStats() {
-    // Fetch all products from DB
-    const products = await Product.find({});
+router.get('/products', async (req, res) => {
+    try {
+        const stats = await Order.aggregate([
+            {
+                $match: { paid: true }  // ADD THIS LINE - only count paid orders
+            },
+            {
+                $unwind: '$items'
+            },
+            {
+                $group: {
+                    _id: '$items.productId',
+                    purchases: { $sum: '$items.quantity' },
+                    revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
+                }
+            },
+            {
+                $project: {
+                    productId: { $toString: '$_id' },
+                    purchases: 1,
+                    revenue: 1,
+                    _id: 0
+                }
+            }
+        ]);
 
-    // Map to stats array
-    const stats = products.map(p => ({
-        productId: p._id.toString(),
-        purchases: p.purchases || 0,
-    }));
+        res.json(stats);
+    } catch (error) {
+        console.error('Stats error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
 
-    console.log("getAllProductStats:", stats);
-    return stats;
-}
-
-// Broadcast stats via Socket.IO
-async function broadcastStats(io) {
-    const stats = await getAllProductStats();
-    // Only send productId and purchases
-    const formattedStats = stats.map(s => ({
-        productId: s.productId,
-        purchases: s.purchases
-    }));
-    io.emit('updateStats', formattedStats);
-}
-
-module.exports = {
-    router,
-    broadcastStats,
-    getAllProductStats
-};
+module.exports = router;

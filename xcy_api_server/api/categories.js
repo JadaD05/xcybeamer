@@ -65,7 +65,7 @@ router.post('/create', authenticateToken, isAdmin, async (req, res) => {
 router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
   try {
     const category = await Category.findByIdAndDelete(req.params.id);
-    
+
     if (!category) {
       return res.status(404).json({
         success: false,
@@ -79,6 +79,50 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting category:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { name, game, image, description } = req.body;
+
+    if (!name || !game) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and game are required'
+      });
+    }
+
+    const category = await Category.findByIdAndUpdate(
+      req.params.id,
+      { name, game, image, description },
+      { new: true, runValidators: true }
+    );
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: 'Category not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Category updated successfully',
+      category
+    });
+  } catch (error) {
+    console.error('Error updating category:', error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Category name already exists'
+      });
+    }
     res.status(500).json({
       success: false,
       message: 'Server error'

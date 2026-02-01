@@ -1,6 +1,4 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
@@ -8,18 +6,6 @@ const connectDB = require('./config/db');
 dotenv.config();
 
 const app = express();
-
-// Create HTTP server for Socket.IO
-const server = http.createServer(app);
-
-// Initialize Socket.IO
-const io = new Server(server, {
-  cors: { origin: '*' },
-  methods: ["GET", "POST"]
-});
-
-// Make io globally accessible in routes
-app.set('io', io);
 
 // Connect to MongoDB
 connectDB();
@@ -46,6 +32,10 @@ app.use(express.json());
 // Import routes
 const statsRoutes = require('./api/stats');
 const categoryRoutes = require('./api/categories');
+const guideRoutes = require('./api/guides');
+const featureListRoutes = require('./api/featureLists');
+const promoCodeRoutes = require('./api/promoCodes');
+const userRoutes = require('./api/users');
 
 // Routes
 app.use('/auth', require('./api/auth'));
@@ -53,26 +43,21 @@ app.use('/payments', require('./api/payments'));
 app.use('/orders', require('./api/orders'));
 app.use('/products', require('./api/products'));
 app.use('/admin', require('./api/admin'));
-app.use('/admin', statsRoutes.router);
 app.use('/product-keys', require('./api/productKeys'));
 app.use('/categories', categoryRoutes);
+app.use('/guides', guideRoutes);
+app.use('/feature-lists', featureListRoutes);
+app.use('/promo-codes', promoCodeRoutes);
+app.use('/users', userRoutes);
+app.use("/stats", statsRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'XCY BEAMER API is running' });
 });
 
-// Socket.IO connection handler
-io.on('connection', (socket) => {
-  console.log('New admin client connected:', socket.id);
-
-  socket.on('disconnect', () => {
-    console.log('Admin client disconnected:', socket.id);
-  });
-});
-
 const PORT = process.env.PORT || 5000;
 
 // Use server.listen() instead of app.listen()
-server.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });

@@ -19,7 +19,7 @@ router.post('/create', authenticateToken, async (req, res) => {
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
     // Check if user already owns it
-    const existingOrder = await Order.findOne({ userId, productId, status: 'completed' });
+    const existingOrder = await Order.findOne({ userId, paid: true, "items.game": product.game });
     if (existingOrder) return res.status(400).json({ success: false, message: 'You already own this product. Check your Client page.' });
 
     // Find available key
@@ -31,14 +31,29 @@ router.post('/create', authenticateToken, async (req, res) => {
     availableKey.soldTo = userId;
     availableKey.soldAt = new Date();
 
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    console.log("Creating order for product:", product);
+    console.log("product.game =", product?.game);
+
     // Create order first
     const order = new Order({
       userId,
-      productId,
-      productKeyId: availableKey._id,
-      price: product.price,
-      stripeSessionId,
-      status: 'completed'
+      userEmail: user.email,
+      items: [
+        {
+          productId,
+          productKeyId: availableKey._id,
+          name: product.name,
+          game: product.game,
+          price: product.price,
+          quantity: 1
+        }
+      ],
+      total: product.price,
+      sessionId: stripeSessionId,
+      paid: true
     });
 
     await order.save();
@@ -77,8 +92,6 @@ router.post('/create', authenticateToken, async (req, res) => {
 router.get('/my-orders', authenticateToken, async (req, res) => {
   try {
     const orders = await Order.find({ userId: req.user.userId })
-      .populate('productId')
-      .populate('productKeyId')
       .sort({ createdAt: -1 });
 
     res.json({
@@ -125,6 +138,45 @@ router.get('/my-keys', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   GET /api/orders/user/products
+// @desc    Get user's purchased games (for docs access)
+// @access  Private
+router.get('/user/products', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Find all paid orders for this user
+    const orders = await Order.find({ userId, paid: true });
+
+    // Extract unique games
+    const gameMap = new Map();
+
+    orders.forEach(order => {
+      order.items.forEach(item => {
+        if (!gameMap.has(item.game)) {
+          gameMap.set(item.game, {
+            game: item.game,
+            purchasedAt: order.createdAt
+          });
+        }
+      });
+    });
+
+    const purchasedGames = Array.from(gameMap.values());
+
+    res.json({
+      success: true,
+      games: purchasedGames
+    });
+  } catch (error) {
+    console.error('Error fetching user products:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // @route   GET /api/orders/all (Admin only)
 // @desc    Get all orders
 // @access  Private
@@ -132,8 +184,6 @@ router.get('/all', authenticateToken, async (req, res) => {
   try {
     const orders = await Order.find()
       .populate('userId', 'username email')
-      .populate('productId')
-      .populate('productKeyId')
       .sort({ createdAt: -1 });
 
     res.json({

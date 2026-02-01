@@ -40,7 +40,7 @@ export const productKeyAPI = {
   addSingle: (productId, key, notes) => api.post('/product-keys/add-single', { productId, key, notes }),
   getAvailable: (productId) => api.get(`/product-keys/${productId}/available`),
   getStats: (productId) => api.get(`/product-keys/${productId}/stats`),
-  getAll: (productId, page, limit, filter) => 
+  getAll: (productId, page, limit, filter) =>
     api.get(`/product-keys/${productId}/all?page=${page}&limit=${limit}&filter=${filter}`),
   delete: (keyId) => api.delete(`/product-keys/${keyId}`),
 };
@@ -51,6 +51,53 @@ export const orderAPI = {
   getMyOrders: () => api.get('/orders/my-orders'),
   getMyKeys: () => api.get('/orders/my-keys'),
   getAll: () => api.get('/orders/all'),
+  getUserPurchasedProducts: () => api.get('/orders/user/products')
 };
+
+// Category API
+export const categoryAPI = {
+  getAll: () => api.get('/categories/get'),
+  create: (data) => api.post('/categories/create', data),
+  update: (id, data) => api.put(`/categories/${id}`, data),
+  delete: (id) => api.delete(`/categories/${id}`)
+};
+
+export const guideAPI = {
+  getAll: () => api.get('/guides/get'),
+  create: (data) => api.post('/guides/create', data),
+  update: (id, data) => api.put(`/guides/${id}`, data),
+  delete: (id) => api.delete(`/guides/${id}`)
+};
+
+export const featureListAPI = {
+  get: (productId) => api.get(`/feature-lists/${productId}`),
+  create: (data) => api.post('/feature-lists/create', data),
+  delete: (productId) => api.delete(`/feature-lists/${productId}`)
+};
+
+// Promo Code API
+export const promoCodeAPI = {
+  getAll: () => api.get('/promo-codes/get'),
+  validate: (data) => api.post('/promo-codes/validate', data),
+  create: (data) => api.post('/promo-codes/create', data),
+  update: (id, data) => api.put(`/promo-codes/${id}`, data),
+  delete: (id) => api.delete(`/promo-codes/${id}`),
+  incrementUsage: (code) => api.post('/promo-codes/increment-usage', { code })
+};
+
+export const userAPI = {
+  getAll: () => api.get('/users/get'),
+  getOrders: (userId) => api.get(`/users/${userId}/orders`),
+  update: (userId, data) => api.put(`/users/${userId}`, data),
+  resetPassword: (userId, newPassword) => api.put(`/users/${userId}/password`, { newPassword }),
+  delete: (userId) => api.delete(`/users/${userId}`),
+  getRevenue: () => api.get('/users/stats/revenue')
+};
+
+// Stats API
+export const statsAPI = {
+  getAllProductStats: () => api.get('/stats/products')
+};
+
 
 export default api;

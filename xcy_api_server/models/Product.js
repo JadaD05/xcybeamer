@@ -42,8 +42,8 @@ const productSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Active', 'Maintenance', 'Coming Soon'],
-    default: 'Active'
+    enum: ['Undetected', 'Detected', 'Coming Soon'],
+    default: 'Undetected'
   },
   createdAt: {
     type: Date,

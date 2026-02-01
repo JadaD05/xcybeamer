@@ -7,7 +7,6 @@ import { productAPI, productKeyAPI } from './utils/api';
 export default function KeyManagement() {
   const navigate = useNavigate();
   const user = isAuthenticated() ? getUser() : null;
-  const [isAuthorized, setIsAuthorized] = useState(false);
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [keys, setKeys] = useState([]);
@@ -18,10 +17,8 @@ export default function KeyManagement() {
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    if (!isAuthenticated() || !isAdmin()) {
+    if (!isAdmin()) {
       navigate('/', { replace: true });
-    } else {
-      setIsAuthorized(true); // Only set authorized if checks pass
     }
   }, []);
 

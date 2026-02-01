@@ -7,6 +7,7 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const ProductKey = require('../models/ProductKey');
+const PromoCode = require('../models/PromoCode');
 const { broadcastStats, getAllProductStats } = require('./stats');
 
 const FRONTEND_URL = process.env.FRONTEND_URL;
@@ -16,24 +17,36 @@ const FRONTEND_URL = process.env.FRONTEND_URL;
 // =========================
 router.post('/create-session', async (req, res) => {
     try {
-        const { items, userEmail } = req.body;
+        const { items, userEmail, promoCode, subtotal, discount, total } = req.body;
+
+        console.log('Items:', items, 'Email:', userEmail, 'Promo:', promoCode);
 
         if (!items || items.length === 0) {
             return res.status(400).json({ success: false, message: 'No items provided' });
         }
 
+        // Stripe minimum
+        if (total < 0.50) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order total must be at least $0.50'
+            });
+        }
+
+        // Create Stripe line items (prices already discounted)
         const line_items = items.map(item => ({
             price_data: {
                 currency: 'aud',
                 product_data: {
                     name: item.name,
                     images: [
-                        typeof item.image === "string" && (item.image.startsWith("http") || item.image.startsWith("/"))
+                        typeof item.image === "string" &&
+                            (item.image.startsWith("http") || item.image.startsWith("/"))
                             ? `${FRONTEND_URL}${item.image.startsWith("/") ? "" : "/"}${item.image}`
                             : `${FRONTEND_URL}/images/default.png`
                     ],
                 },
-                unit_amount: Math.round(item.price * 100),
+                unit_amount: Math.round(item.price * 100), // already includes discount
             },
             quantity: item.quantity || 1,
         }));
@@ -44,25 +57,42 @@ router.post('/create-session', async (req, res) => {
             customer_email: userEmail,
             payment_method_types: ['card'],
             success_url: `${FRONTEND_URL}/products`,
-            cancel_url: `${FRONTEND_URL}/cancel`,
+            cancel_url: `${FRONTEND_URL}/cart`,
+            metadata: {
+                promoCode: promoCode || '',
+                subtotal: subtotal.toFixed(2),
+                discount: discount.toFixed(2),
+                total: total.toFixed(2)
+            }
         });
 
         const user = await User.findOne({ email: userEmail });
-        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
 
-        // Save order WITHOUT product keys yet
-        const itemsWithId = items.map(item => ({
-            productId: new mongoose.Types.ObjectId(item.productId),
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity || 1,
+        // Save order (NO backend price math)
+        const itemsWithId = await Promise.all(items.map(async (item) => {
+            const product = await Product.findById(item.productId);
+            if (!product) throw new Error(`Product ${item.productId} not found`);
+
+            return {
+                productId: product._id,
+                name: product.name,
+                game: product.game,
+                price: item.price, // ⭐ FIX: save what the customer actually paid
+                quantity: item.quantity || 1,
+            };
         }));
 
         await Order.create({
             userEmail,
             userId: user._id,
             items: itemsWithId,
-            total: itemsWithId.reduce((acc, i) => acc + i.price * i.quantity, 0),
+            subtotal,
+            discount,
+            promoCode: promoCode || null,
+            total,
             sessionId: session.id,
             paid: false,
         });
@@ -73,6 +103,7 @@ router.post('/create-session', async (req, res) => {
         res.status(500).json({ success: false, message: 'Payment session creation failed' });
     }
 });
+
 
 // =========================
 // STRIPE WEBHOOK
@@ -140,6 +171,16 @@ router.post(
                 }
 
                 await order.save();
+
+                // Increment promo code usage if one was used
+                if (order.promoCode) {
+                    await PromoCode.findOneAndUpdate(
+                        { code: order.promoCode.toUpperCase() },
+                        { $inc: { usedCount: 1 } }
+                    );
+                    console.log('Promo code usage incremented:', order.promoCode);
+                }
+
                 await broadcastStats(req.app.get('io'));
             } catch (dbErr) {
                 console.error('Database update error:', dbErr);
