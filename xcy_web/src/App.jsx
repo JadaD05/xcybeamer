@@ -13,6 +13,8 @@ import KeyManagement from "./KeyManagement";
 import ProductDetail from './pages/ProductDetail';
 import Status from "./pages/Status";
 import Cart from './pages/Cart';
+import Profile from './pages/Profile';
+import VerifyEmail from './pages/VerifyEmail';
 
 function App() {
   return (
@@ -31,6 +33,8 @@ function App() {
         <Route path="/cart" element={<Cart />} />
         <Route path="/key-management" element={<KeyManagement />} />
         <Route path="/products/:id" element={<ProductDetail />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
       </Routes>
     </CartProvider>
   );

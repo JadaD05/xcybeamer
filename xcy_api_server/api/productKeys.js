@@ -10,12 +10,19 @@ const { authenticateToken } = require('../middleware/auth');
 // @access  Private
 router.post('/add', authenticateToken, async (req, res) => {
     try {
-        const { productId, keys, notes } = req.body;
+        const { productId, keys, keyType, notes } = req.body;
 
         if (!productId || !keys || !Array.isArray(keys) || keys.length === 0) {
             return res.status(400).json({
                 success: false,
                 message: 'Product ID and keys array are required'
+            });
+        }
+
+        if (!keyType || !['1day', '1week', '1month'].includes(keyType)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid key type is required (1day, 1week, or 1month)'
             });
         }
 
@@ -32,6 +39,7 @@ router.post('/add', authenticateToken, async (req, res) => {
         const keysToInsert = keys.map(key => ({
             key: key.trim().toUpperCase(),
             productId,
+            keyType,
             notes: notes || ''
         }));
 
@@ -53,13 +61,12 @@ router.post('/add', authenticateToken, async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: `Successfully added ${insertedKeys.length} keys for ${product.name}`,
+            message: `Successfully added ${insertedKeys.length} ${keyType} keys for ${product.name}`,
             count: insertedKeys.length
         });
     } catch (error) {
         console.error('Add keys error:', error);
 
-        // Handle duplicate key error from MongoDB
         if (error.code === 11000) {
             return res.status(400).json({
                 success: false,
@@ -79,12 +86,19 @@ router.post('/add', authenticateToken, async (req, res) => {
 // @access  Private
 router.post('/add-single', authenticateToken, async (req, res) => {
     try {
-        const { productId, key, notes } = req.body;
+        const { productId, key, keyType, notes } = req.body;
 
         if (!productId || !key) {
             return res.status(400).json({
                 success: false,
                 message: 'Product ID and key are required'
+            });
+        }
+
+        if (!keyType || !['1day', '1week', '1month'].includes(keyType)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid key type is required (1day, 1week, or 1month)'
             });
         }
 
@@ -113,6 +127,7 @@ router.post('/add-single', authenticateToken, async (req, res) => {
         const newKey = new ProductKey({
             key: key.trim().toUpperCase(),
             productId,
+            keyType,
             notes: notes || ''
         });
 
@@ -156,9 +171,9 @@ router.get('/:productId/available', async (req, res) => {
 });
 
 // @route   GET /api/product-keys/:productId/stats
-// @desc    Get key statistics for a product - Admin only
+// @desc    Get key statistics for a product
 // @access  Private
-router.get('/:productId/stats', authenticateToken, async (req, res) => {
+router.get('/:productId/stats', async (req, res) => {
     try {
         const total = await ProductKey.countDocuments({
             productId: req.params.productId
@@ -174,12 +189,51 @@ router.get('/:productId/stats', authenticateToken, async (req, res) => {
             isSold: false
         });
 
+        // Stats broken down by key type
+        const oneDayTotal = await ProductKey.countDocuments({
+            productId: req.params.productId,
+            keyType: '1day'
+        });
+
+        const oneDayAvailable = await ProductKey.countDocuments({
+            productId: req.params.productId,
+            keyType: '1day',
+            isSold: false
+        });
+
+        const oneWeekTotal = await ProductKey.countDocuments({
+            productId: req.params.productId,
+            keyType: '1week'
+        });
+
+        const oneWeekAvailable = await ProductKey.countDocuments({
+            productId: req.params.productId,
+            keyType: '1week',
+            isSold: false
+        });
+
+        const oneMonthTotal = await ProductKey.countDocuments({
+            productId: req.params.productId,
+            keyType: '1month'
+        });
+
+        const oneMonthAvailable = await ProductKey.countDocuments({
+            productId: req.params.productId,
+            keyType: '1month',
+            isSold: false
+        });
+
         res.json({
             success: true,
             stats: {
                 total,
                 sold,
-                available
+                available,
+                byType: {
+                    '1day': { total: oneDayTotal, available: oneDayAvailable },
+                    '1week': { total: oneWeekTotal, available: oneWeekAvailable },
+                    '1month': { total: oneMonthTotal, available: oneMonthAvailable }
+                }
             }
         });
     } catch (error) {

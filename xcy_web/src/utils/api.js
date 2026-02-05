@@ -22,6 +22,32 @@ api.interceptors.request.use((config) => {
 export const authAPI = {
   signup: (userData) => api.post('/auth/signup', userData),
   signin: (userData) => api.post('/auth/signin', userData),
+
+  // 2FA functions
+  signin2FA: (userId, token, backupCode) =>
+    api.post('/auth/signin-2fa', { userId, token, backupCode }),
+  setup2FA: () => api.post('/twofactor/setup'),
+  verify2FA: (token) => api.post('/twofactor/verify', { token }),
+  disable2FA: (token) => api.post('/twofactor/disable', { token }),
+  getBackupCodes: () => api.get('/twofactor/backup-codes'),
+  regenerateBackupCodes: (token) =>
+    api.post('/twofactor/regenerate-backup-codes', { token }),
+
+  // Email verification functions
+  verifyEmail: (userId, token) =>
+    api.post('/auth/verify-email', { userId, token }),
+
+  resendVerification: (email) =>
+    api.post('/auth/resend-verification', { email }),
+
+  forgotPassword: (email) =>
+    api.post('/auth/forgot-password', { email }),
+
+  resetPassword: (userId, token, newPassword, confirmPassword) =>
+    api.post('/auth/reset-password', { userId, token, newPassword, confirmPassword }),
+
+  updateProfile: (userData) => api.put('/auth/update-profile', userData),
+  changePassword: (passwordData) => api.put('/auth/change-password', passwordData),
   getMe: () => api.get('/auth/me'),
 };
 
@@ -36,8 +62,8 @@ export const productAPI = {
 
 // Product Key API calls
 export const productKeyAPI = {
-  addBulk: (productId, keys, notes) => api.post('/product-keys/add', { productId, keys, notes }),
-  addSingle: (productId, key, notes) => api.post('/product-keys/add-single', { productId, key, notes }),
+  addBulk: (productId, keys, notes, keyType) => api.post('/product-keys/add', { productId, keys, notes, keyType }),
+  addSingle: (productId, key, notes, keyType) => api.post('/product-keys/add-single', { productId, key, notes, keyType }),
   getAvailable: (productId) => api.get(`/product-keys/${productId}/available`),
   getStats: (productId) => api.get(`/product-keys/${productId}/stats`),
   getAll: (productId, page, limit, filter) =>

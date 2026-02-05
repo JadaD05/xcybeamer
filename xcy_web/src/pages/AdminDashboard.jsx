@@ -3,11 +3,12 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { isAuthenticated, getUser, logout, isAdmin } from "../utils/auth";
 import { productAPI, categoryAPI, guideAPI, featureListAPI, promoCodeAPI, userAPI, productKeyAPI, statsAPI } from "../utils/api";
-import { Plus, Trash2, Edit, Gamepad2, X, Shield, Key, User as UserIcon, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Edit, Gamepad2, X, Shield, Key, User as UserIcon, AlertCircle, MessageCircle } from "lucide-react";
 
 export default function AdminDashboard() {
     const navigate = useNavigate();
     const user = isAuthenticated() ? getUser() : null;
+    const rolePriority = ["dev", "admin", "user"];
     const [products, setProducts] = useState([]);
     const [productStats, setProductStats] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -18,6 +19,10 @@ export default function AdminDashboard() {
         game: "",
         category: "FPS",
         price: "",
+        pricing: {
+            '1day': "",
+            '1week': ""
+        },
         downloadUrl: "",
         image: "",
         features: "",
@@ -82,6 +87,43 @@ export default function AdminDashboard() {
     const [bulkKeys, setBulkKeys] = useState('');
     const [keyNotes, setKeyNotes] = useState('');
     const [loadingKeys, setLoadingKeys] = useState(false);
+    const [keyType, setKeyType] = useState('1day');
+    const [isBulk, setIsBulk] = useState(false);
+    const [singleKey, setSingleKey] = useState('');
+
+    const KEY_TYPE_META = {
+        '1day': {
+            label: '1 Day',
+            classes: 'bg-orange-500/20 text-orange-400'
+        },
+        '1week': {
+            label: '1 Week',
+            classes: 'bg-blue-500/20 text-blue-400'
+        },
+        '1month': {
+            label: '1 Month',
+            classes: 'bg-purple-500/20 text-purple-400'
+        }
+    };
+
+    const getPrimaryRole = (user) => {
+        const roles = Array.isArray(user.roles) ? user.roles : user.role ? [user.role] : ["user"];
+        return rolePriority.find((r) => roles.includes(r)) || "user";
+    };
+
+    const canManageUser = (targetUser) => {
+        if (!user) return false;
+
+        const targetPrimaryRole = getPrimaryRole(targetUser);
+        const currentUserPrimaryRole = getPrimaryRole(user);
+
+        // Admins cannot manage devs (even if they are also admin)
+        if (currentUserPrimaryRole === "admin" && targetPrimaryRole === "dev") {
+            return false;
+        }
+
+        return true;
+    };
 
     useEffect(() => {
         if (!isAuthenticated() || !isAdmin()) {
@@ -157,7 +199,7 @@ export default function AdminDashboard() {
                     products.map(async (product) => {
                         try {
                             const res = await featureListAPI.get(product._id);
-                            if (res.data.featureList) {
+                            if (res.data.featureList && res.data.featureList.sections) {  // ADD SECTIONS CHECK
                                 return {
                                     ...res.data.featureList,
                                     productName: product.name,
@@ -170,7 +212,7 @@ export default function AdminDashboard() {
                         }
                     })
                 );
-                setFeatureLists(lists.filter(l => l !== null));
+                setFeatureLists(lists.filter(l => l !== null && l.sections)); // FILTER OUT NULL AND ITEMS WITHOUT SECTIONS
             } catch (err) {
                 console.error('Error fetching feature lists:', err);
             }
@@ -185,7 +227,13 @@ export default function AdminDashboard() {
         const fetchPromoCodes = async () => {
             try {
                 const res = await promoCodeAPI.getAll();
-                setPromoCodes(res.data.promoCodes || []);
+                const promoCodes = res.data.promoCodes || [];
+                // Ensure all promo codes have applicableGames array
+                const validPromoCodes = promoCodes.map(promo => ({
+                    ...promo,
+                    applicableGames: Array.isArray(promo.applicableGames) ? promo.applicableGames : []
+                }));
+                setPromoCodes(validPromoCodes);
             } catch (err) {
                 console.error('Error fetching promo codes:', err);
             }
@@ -237,7 +285,6 @@ export default function AdminDashboard() {
 
     const handleAddProduct = async () => {
         try {
-            // Convert features string to array
             const featuresArray = newProduct.features
                 .split(',')
                 .map(f => f.trim())
@@ -248,6 +295,10 @@ export default function AdminDashboard() {
                 features: featuresArray,
                 price: parseFloat(newProduct.price),
                 rating: parseFloat(newProduct.rating),
+                pricing: {
+                    '1day': newProduct.pricing['1day'] ? parseFloat(newProduct.pricing['1day']) : null,
+                    '1week': newProduct.pricing['1week'] ? parseFloat(newProduct.pricing['1week']) : null
+                }
             };
 
             const res = await productAPI.create(productData);
@@ -258,6 +309,7 @@ export default function AdminDashboard() {
                 game: "",
                 category: "FPS",
                 price: "",
+                pricing: { '1day': "", '1week': "" },
                 downloadUrl: "",
                 image: "",
                 features: "",
@@ -312,6 +364,10 @@ export default function AdminDashboard() {
                 ...newProduct,
                 features: featuresArray,
                 price: parseFloat(newProduct.price),
+                pricing: {
+                    '1day': newProduct.pricing['1day'] ? parseFloat(newProduct.pricing['1day']) : null,
+                    '1week': newProduct.pricing['1week'] ? parseFloat(newProduct.pricing['1week']) : null
+                }
             };
 
             const res = await productAPI.update(editingProduct._id, productData);
@@ -753,28 +809,45 @@ export default function AdminDashboard() {
         }
     };
 
-    const handleAddBulkKeys = async () => {
-        if (!selectedProductForKeys || !bulkKeys.trim()) {
-            alert('Please select a product and enter keys');
-            return;
-        }
-
-        const keyArray = bulkKeys
-            .split('\n')
-            .map(k => k.trim())
-            .filter(k => k.length > 0);
-
-        if (keyArray.length === 0) {
-            alert('No valid keys found');
+    const handleAddKeys = async () => {
+        if (!selectedProductForKeys) {
+            alert('Please select a product');
             return;
         }
 
         try {
-            const res = await productKeyAPI.addBulk(selectedProductForKeys, keyArray, keyNotes);
-            alert(res.data.message);
+            if (isBulk) {
+                const keysArray = bulkKeys
+                    .split('\n')
+                    .map(k => k.trim())
+                    .filter(k => k.length > 0);
+
+                if (keysArray.length === 0) {
+                    alert('Please enter at least one key');
+                    return;
+                }
+
+                const res = await productKeyAPI.addBulk(selectedProductForKeys, keysArray, keyNotes, keyType);
+                alert(res.data.message);
+            } else {
+                if (!singleKey.trim()) {
+                    alert('Please enter a key');
+                    return;
+                }
+
+                const res = await productKeyAPI.addSingle(selectedProductForKeys, singleKey, keyNotes, keyType);
+                alert(res.data.message);
+            }
+
+            // Reset
+            setShowAddKeysModal(false);
+            setSingleKey('');
             setBulkKeys('');
             setKeyNotes('');
-            setShowAddKeysModal(false);
+            setKeyType('1day');
+            setIsBulk(false);
+
+            // Refresh
             fetchProductKeys(selectedProductForKeys);
             fetchKeyStats(selectedProductForKeys);
         } catch (err) {
@@ -866,6 +939,10 @@ export default function AdminDashboard() {
                             game: "",
                             category: "FPS",
                             price: "",
+                            pricing: {
+                                "1day": "",
+                                "1week": ""
+                            },
                             downloadUrl: "",
                             image: "",
                             features: "",
@@ -937,6 +1014,10 @@ export default function AdminDashboard() {
                                                             setNewProduct({
                                                                 ...p,
                                                                 features: Array.isArray(p.features) ? p.features.join(", ") : "",
+                                                                pricing: {
+                                                                    '1day': p.pricing?.['1day'] || "",
+                                                                    '1week': p.pricing?.['1week'] || ""
+                                                                }
                                                             });
                                                             setShowAddModal(true);
                                                         }}
@@ -1382,80 +1463,108 @@ export default function AdminDashboard() {
                             No users found.
                         </div>
                     ) : (
-                        users.map((user) => (
-                            <div
-                                key={user._id}
-                                className="grid grid-cols-6 px-6 py-4 items-center border-b border-gray-700/50 hover:bg-gray-800/50 transition"
-                            >
-                                {/* Username */}
-                                <div className="text-left font-semibold text-white flex items-center gap-2">
-                                    <UserIcon className="w-4 h-4 text-blue-400" />
-                                    {user.username}
-                                </div>
+                        [...users]
+                            .sort((a, b) => {
+                                const roleOrder = { dev: 0, admin: 1, user: 2 };
+                                const aRole = getPrimaryRole(a);
+                                const bRole = getPrimaryRole(b);
+                                return (roleOrder[aRole] ?? 3) - (roleOrder[bRole] ?? 3);
+                            })
+                            .map((targetUser) => {
+                                const primaryRole = getPrimaryRole(targetUser);
+                                const disabled = !canManageUser(targetUser);
 
-                                {/* Email */}
-                                <div className="text-left text-gray-400 text-sm">
-                                    {user.email}
-                                </div>
-
-                                {/* Role */}
-                                <div className="text-center">
-                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${user.isAdmin
-                                        ? 'bg-purple-500/20 text-purple-400'
-                                        : 'bg-gray-500/20 text-gray-400'
-                                        }`}>
-                                        {user.isAdmin ? 'Admin' : 'User'}
-                                    </span>
-                                </div>
-
-                                {/* Orders Count */}
-                                <div className="text-center">
-                                    <button
-                                        onClick={() => handleViewOrders(user)}
-                                        className="text-blue-400 hover:text-blue-300 font-semibold"
+                                return (
+                                    <div
+                                        key={targetUser._id}
+                                        className="grid grid-cols-6 px-6 py-4 items-center border-b border-gray-700/50 hover:bg-gray-800/50 transition"
                                     >
-                                        View Orders
-                                    </button>
-                                </div>
+                                        {/* Username */}
+                                        <div className="text-left font-semibold text-white flex items-center gap-2">
+                                            <UserIcon className="w-4 h-4 text-blue-400" />
+                                            {targetUser.username}
+                                        </div>
 
-                                {/* Joined Date */}
-                                <div className="text-center text-gray-400 text-sm">
-                                    {new Date(user.createdAt).toLocaleDateString()}
-                                </div>
+                                        {/* Email */}
+                                        <div className="text-left text-gray-400 text-sm">
+                                            {targetUser.email}
+                                        </div>
 
-                                {/* Actions */}
-                                <div className="text-right">
-                                    <div className="flex gap-2 justify-end">
-                                        <button
-                                            onClick={() => handleEditUser(user)}
-                                            className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-sm"
-                                            title="Edit User"
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                        </button>
+                                        {/* Role */}
+                                        <div className="text-center">
+                                            <span
+                                                className={`px-3 py-1 rounded-full text-xs font-semibold ${primaryRole === "dev"
+                                                    ? "bg-red-500/20 text-red-400"
+                                                    : primaryRole === "admin"
+                                                        ? "bg-purple-500/20 text-purple-400"
+                                                        : "bg-gray-500/20 text-gray-400"
+                                                    }`}
+                                            >
+                                                {primaryRole.toUpperCase()}
+                                            </span>
+                                        </div>
 
-                                        <button
-                                            onClick={() => {
-                                                setSelectedUser(user);
-                                                setShowPasswordModal(true);
-                                            }}
-                                            className="text-yellow-400 hover:text-yellow-300 flex items-center gap-1 text-sm"
-                                            title="Reset Password"
-                                        >
-                                            <Key className="w-4 h-4" />
-                                        </button>
+                                        {/* Orders */}
+                                        <div className="text-center">
+                                            <button
+                                                onClick={() => handleViewOrders(targetUser)}
+                                                className="text-blue-400 hover:text-blue-300 font-semibold"
+                                            >
+                                                View Orders
+                                            </button>
+                                        </div>
 
-                                        <button
-                                            onClick={() => handleDeleteUser(user._id)}
-                                            className="text-red-500 hover:text-red-400 flex items-center gap-1 text-sm"
-                                            title="Delete User"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        {/* Joined */}
+                                        <div className="text-center text-gray-400 text-sm">
+                                            {new Date(targetUser.createdAt).toLocaleDateString()}
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="text-right">
+                                            <div className="flex gap-2 justify-end">
+                                                <button
+                                                    onClick={() => handleEditUser(targetUser)}
+                                                    disabled={disabled}
+                                                    className={`flex items-center gap-1 text-sm ${disabled
+                                                        ? "text-gray-600 cursor-not-allowed"
+                                                        : "text-blue-400 hover:text-blue-300"
+                                                        }`}
+                                                    title={disabled ? "You cannot manage developers" : "Edit User"}
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                </button>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedUser(targetUser);
+                                                        setShowPasswordModal(true);
+                                                    }}
+                                                    disabled={disabled}
+                                                    className={`flex items-center gap-1 text-sm ${disabled
+                                                        ? "text-gray-600 cursor-not-allowed"
+                                                        : "text-yellow-400 hover:text-yellow-300"
+                                                        }`}
+                                                    title={disabled ? "You cannot manage developers" : "Reset Password"}
+                                                >
+                                                    <Key className="w-4 h-4" />
+                                                </button>
+
+                                                <button
+                                                    onClick={() => handleDeleteUser(targetUser._id)}
+                                                    disabled={disabled}
+                                                    className={`flex items-center gap-1 text-sm ${disabled
+                                                        ? "text-gray-600 cursor-not-allowed"
+                                                        : "text-red-500 hover:text-red-400"
+                                                        }`}
+                                                    title={disabled ? "You cannot manage developers" : "Delete User"}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                        ))
+                                );
+                            })
                     )}
                 </div>
             </div>
@@ -1484,7 +1593,7 @@ export default function AdminDashboard() {
                 {selectedProductForKeys && keyStats && (
                     <>
                         {/* Statistics */}
-                        <div className="grid md:grid-cols-3 gap-6 mb-6">
+                        <div className="grid md:grid-cols-3 gap-6 mb-4">
                             <div className="bg-gradient-to-br from-gray-900 to-gray-800 p-6 rounded-xl border border-gray-700">
                                 <h3 className="text-sm text-gray-400 mb-2">Total Keys</h3>
                                 <p className="text-3xl font-bold text-blue-400">{keyStats.total}</p>
@@ -1499,16 +1608,85 @@ export default function AdminDashboard() {
                             </div>
                         </div>
 
-                        {/* Low Stock Warning */}
-                        {keyStats.available < 10 && (
-                            <div className="bg-yellow-500/10 border border-yellow-500 rounded-lg p-4 mb-6 flex items-center gap-3">
-                                <AlertCircle className="w-6 h-6 text-yellow-500" />
-                                <div>
-                                    <p className="font-semibold text-yellow-500">Low Stock Warning</p>
-                                    <p className="text-sm text-gray-300">Only {keyStats.available} keys remaining for this product</p>
+                        {/* Key Type Breakdown */}
+                        <div className="grid md:grid-cols-3 gap-4 mb-6">
+                            {/* 1 Day */}
+                            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-orange-500/20 text-orange-400 px-3 py-1 rounded-full text-xs font-semibold">
+                                        1 Day
+                                    </span>
+                                    <span className="text-sm text-gray-400">Keys</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-green-400 font-bold">
+                                        {keyStats.byType?.["1day"]?.available || 0}
+                                    </span>
+                                    <span className="text-gray-500">
+                                        {" "} / {keyStats.byType?.["1day"]?.total || 0}
+                                    </span>
+                                    <span className="text-gray-500 text-xs ml-2">available</span>
                                 </div>
                             </div>
-                        )}
+
+                            {/* 1 Week */}
+                            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-semibold">
+                                        1 Week
+                                    </span>
+                                    <span className="text-sm text-gray-400">Keys</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-green-400 font-bold">
+                                        {keyStats.byType?.["1week"]?.available || 0}
+                                    </span>
+                                    <span className="text-gray-500">
+                                        {" "} / {keyStats.byType?.["1week"]?.total || 0}
+                                    </span>
+                                    <span className="text-gray-500 text-xs ml-2">available</span>
+                                </div>
+                            </div>
+
+                            {/* 1 Month */}
+                            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-semibold">
+                                        1 Month
+                                    </span>
+                                    <span className="text-sm text-gray-400">Keys</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-green-400 font-bold">
+                                        {keyStats.byType?.["1month"]?.available || 0}
+                                    </span>
+                                    <span className="text-gray-500">
+                                        {" "} / {keyStats.byType?.["1month"]?.total || 0}
+                                    </span>
+                                    <span className="text-gray-500 text-xs ml-2">available</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Low Stock Warning (time-limited keys only) */}
+                        {(() => {
+                            const nonAvailable =
+                                (keyStats.byType?.["1day"]?.available || 0) +
+                                (keyStats.byType?.["1week"]?.available || 0);
+                            (keyStats.byType?.["1month"]?.available || 0);
+
+                            return nonAvailable < 10 ? (
+                                <div className="bg-yellow-500/10 border border-yellow-500 rounded-lg p-4 mb-6 flex items-center gap-3">
+                                    <AlertCircle className="w-6 h-6 text-yellow-500" />
+                                    <div>
+                                        <p className="font-semibold text-yellow-500">Low Stock Warning</p>
+                                        <p className="text-sm text-gray-300">
+                                            Only {nonAvailable} time-limited keys remaining
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : null;
+                        })()}
 
                         {/* Add Keys Button */}
                         <button
@@ -1525,9 +1703,10 @@ export default function AdminDashboard() {
                                     <thead className="bg-gray-800 border-b border-gray-700">
                                         <tr>
                                             <th className="p-4 text-left font-semibold text-gray-300">Key</th>
+                                            <th className="p-4 text-left font-semibold text-gray-300">Type</th>
                                             <th className="p-4 text-left font-semibold text-gray-300">Status</th>
                                             <th className="p-4 text-left font-semibold text-gray-300">Sold To</th>
-                                            <th className="p-4 text-left font-semibold text-gray-300">Sold At</th>
+                                            <th className="p-4 text-left font-semibold text-gray-300">Expires</th>
                                             <th className="p-4 text-left font-semibold text-gray-300">Added</th>
                                             <th className="p-4 text-left font-semibold text-gray-300">Actions</th>
                                         </tr>
@@ -1535,37 +1714,59 @@ export default function AdminDashboard() {
                                     <tbody>
                                         {loadingKeys ? (
                                             <tr>
-                                                <td colSpan="6" className="p-8 text-center text-gray-400">
+                                                <td colSpan="7" className="p-8 text-center text-gray-400">
                                                     Loading keys...
                                                 </td>
                                             </tr>
                                         ) : productKeys.length === 0 ? (
                                             <tr>
-                                                <td colSpan="6" className="p-8 text-center text-gray-400">
+                                                <td colSpan="7" className="p-8 text-center text-gray-400">
                                                     No keys found. Add some keys to get started.
                                                 </td>
                                             </tr>
                                         ) : (
                                             productKeys.map((k) => (
-                                                <tr key={k._id} className="border-t border-gray-700/50 hover:bg-gray-800/50 transition">
+                                                <tr
+                                                    key={k._id}
+                                                    className="border-t border-gray-700/50 hover:bg-gray-800/50 transition"
+                                                >
                                                     <td className="p-4 font-mono text-green-400">{k.key}</td>
+
                                                     <td className="p-4">
-                                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${k.isSold
-                                                            ? 'bg-red-500/20 text-red-400'
-                                                            : 'bg-green-500/20 text-green-400'
-                                                            }`}>
-                                                            {k.isSold ? 'Sold' : 'Available'}
+                                                        <span
+                                                            className={`px-3 py-1 rounded-full text-xs font-semibold ${KEY_TYPE_META[k.keyType]?.classes ||
+                                                                "bg-gray-500/20 text-gray-400"
+                                                                }`}
+                                                        >
+                                                            {KEY_TYPE_META[k.keyType]?.label || "Unknown"}
                                                         </span>
                                                     </td>
-                                                    <td className="p-4 text-gray-400">
-                                                        {k.soldTo ? k.soldTo.username : '-'}
+
+                                                    <td className="p-4">
+                                                        <span
+                                                            className={`px-3 py-1 rounded-full text-xs font-semibold ${k.isSold
+                                                                ? "bg-red-500/20 text-red-400"
+                                                                : "bg-green-500/20 text-green-400"
+                                                                }`}
+                                                        >
+                                                            {k.isSold ? "Sold" : "Available"}
+                                                        </span>
                                                     </td>
+
                                                     <td className="p-4 text-gray-400">
-                                                        {k.soldAt ? new Date(k.soldAt).toLocaleDateString() : '-'}
+                                                        {k.soldTo ? k.soldTo.username : "-"}
                                                     </td>
+
+                                                    <td className="p-4 text-gray-400">
+                                                        {k.expiresAt
+                                                            ? new Date(k.expiresAt).toLocaleString()
+                                                            : "-"}
+                                                    </td>
+
                                                     <td className="p-4 text-gray-400">
                                                         {new Date(k.addedAt).toLocaleDateString()}
                                                     </td>
+
                                                     <td className="p-4">
                                                         {!k.isSold && (
                                                             <button
@@ -1637,15 +1838,37 @@ export default function AdminDashboard() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-2">Price *</label>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">1 Month Price (Default)</label>
                                 <input
                                     type="number"
-                                    step="0.01"
                                     placeholder="29.99"
                                     value={newProduct.price}
                                     onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
                                 />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 mt-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-orange-400 mb-2">1 Day Price</label>
+                                    <input
+                                        type="number"
+                                        placeholder="4.99"
+                                        value={newProduct.pricing['1day']}
+                                        onChange={(e) => setNewProduct({ ...newProduct, pricing: { ...newProduct.pricing, '1day': e.target.value } })}
+                                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-blue-400 mb-2">1 Week Price</label>
+                                    <input
+                                        type="number"
+                                        placeholder="14.99"
+                                        value={newProduct.pricing['1week']}
+                                        onChange={(e) => setNewProduct({ ...newProduct, pricing: { ...newProduct.pricing, '1week': e.target.value } })}
+                                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                                    />
+                                </div>
                             </div>
 
                             <div>
@@ -1681,17 +1904,6 @@ export default function AdminDashboard() {
                                     <option value="Detected">Detected</option>
                                     <option value="Coming Soon">Coming Soon</option>
                                 </select>
-                            </div>
-
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-medium mb-2">Features (comma separated)</label>
-                                <input
-                                    type="text"
-                                    placeholder="Aimbot, ESP, No Recoil, Radar"
-                                    value={newProduct.features}
-                                    onChange={(e) => setNewProduct({ ...newProduct, features: e.target.value })}
-                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
-                                />
                             </div>
                         </div>
 
@@ -2345,59 +2557,130 @@ export default function AdminDashboard() {
                 </div>
             )}
 
-            {/* Add Product Keys Modal */}
+            {/* ADD KEYS MODAL */}
             {showAddKeysModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-900 p-8 rounded-2xl w-full max-w-2xl relative border border-gray-800">
-                        <h2 className="text-2xl font-bold mb-6">Add Product Keys</h2>
-                        <button
-                            onClick={() => {
-                                setShowAddKeysModal(false);
-                                setBulkKeys('');
-                                setKeyNotes('');
-                            }}
-                            className="absolute top-6 right-6 text-gray-400 hover:text-white transition"
-                        >
-                            <X className="w-6 h-6" />
-                        </button>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 w-full max-w-lg mx-4">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-bold">Add Product Keys</h3>
+                            <button onClick={() => setShowAddKeysModal(false)} className="text-gray-400 hover:text-white">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Keys (one per line) *
-                                </label>
-                                <textarea
-                                    value={bulkKeys}
-                                    onChange={(e) => setBulkKeys(e.target.value)}
-                                    placeholder="XXXX-XXXX-XXXX-XXXX&#10;YYYY-YYYY-YYYY-YYYY&#10;ZZZZ-ZZZZ-ZZZZ-ZZZZ"
-                                    rows="10"
-                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
-                                />
-                                <p className="text-xs text-gray-400 mt-2">
-                                    Enter keys purchased from the supplier, one per line
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Notes (Optional)
-                                </label>
-                                <input
-                                    type="text"
-                                    value={keyNotes}
-                                    onChange={(e) => setKeyNotes(e.target.value)}
-                                    placeholder="e.g., Batch #123, Supplier: XYZ"
-                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
-                                />
+                        {/* Key Type Selector */}
+                        <div className="mb-5">
+                            <label className="block text-sm font-medium text-gray-400 mb-2">Key Type</label>
+                            <div className="grid grid-cols-3 gap-3">
+                                <button
+                                    onClick={() => setKeyType('1day')}
+                                    className={`p-4 rounded-xl border text-left transition ${keyType === '1day'
+                                        ? 'border-orange-500 bg-orange-500/10'
+                                        : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                                        }`}
+                                >
+                                    <p className={`font-bold ${keyType === '1day' ? 'text-orange-400' : 'text-white'}`}>1 Day</p>
+                                    <p className="text-xs text-gray-400 mt-1">Expires 24hrs after use</p>
+                                </button>
+                                <button
+                                    onClick={() => setKeyType('1week')}
+                                    className={`p-4 rounded-xl border text-left transition ${keyType === '1week'
+                                        ? 'border-blue-500 bg-blue-500/10'
+                                        : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                                        }`}
+                                >
+                                    <p className={`font-bold ${keyType === '1week' ? 'text-blue-400' : 'text-white'}`}>1 Week</p>
+                                    <p className="text-xs text-gray-400 mt-1">Expires 7 days after use</p>
+                                </button>
+                                <button
+                                    onClick={() => setKeyType('1month')}
+                                    className={`p-4 rounded-xl border text-left transition ${keyType === '1month'
+                                        ? 'border-green-500 bg-green-500/10'
+                                        : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                                        }`}
+                                >
+                                    <p className={`font-bold ${keyType === '1month' ? 'text-green-400' : 'text-white'}`}>1 Month</p>
+                                    <p className="text-xs text-gray-400 mt-1">Expires 30 days after use</p>
+                                </button>
                             </div>
                         </div>
 
-                        <button
-                            onClick={handleAddBulkKeys}
-                            className="w-full bg-gradient-to-r from-blue-600 to-green-600 px-6 py-3 rounded-lg mt-6 hover:from-blue-700 hover:to-green-700 transition font-semibold"
-                        >
-                            Add Keys
-                        </button>
+                        {/* Single / Bulk Toggle */}
+                        <div className="mb-5">
+                            <label className="block text-sm font-medium text-gray-400 mb-2">Add Mode</label>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setIsBulk(false)}
+                                    className={`flex-1 py-2 rounded-lg border text-sm font-semibold transition ${!isBulk
+                                        ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                                        : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600'
+                                        }`}
+                                >
+                                    Single Key
+                                </button>
+                                <button
+                                    onClick={() => setIsBulk(true)}
+                                    className={`flex-1 py-2 rounded-lg border text-sm font-semibold transition ${isBulk
+                                        ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                                        : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600'
+                                        }`}
+                                >
+                                    Bulk (one per line)
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Key Input */}
+                        <div className="mb-5">
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                                {isBulk ? 'Keys (one per line)' : 'Key'}
+                            </label>
+                            {isBulk ? (
+                                <textarea
+                                    value={bulkKeys}
+                                    onChange={(e) => setBulkKeys(e.target.value)}
+                                    placeholder={"KEY-AAAA-1111\nKEY-BBBB-2222\nKEY-CCCC-3333"}
+                                    rows={5}
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 font-mono text-sm"
+                                />
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={singleKey}
+                                    onChange={(e) => setSingleKey(e.target.value)}
+                                    placeholder="KEY-AAAA-1111"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 font-mono"
+                                />
+                            )}
+                        </div>
+
+                        {/* Notes */}
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-400 mb-2">Notes (optional)</label>
+                            <input
+                                type="text"
+                                value={keyNotes}
+                                onChange={(e) => setKeyNotes(e.target.value)}
+                                placeholder="e.g. Batch from supplier"
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                            />
+                        </div>
+
+                        {/* Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowAddKeysModal(false)}
+                                className="flex-1 bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-lg font-semibold transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAddKeys}
+                                className="flex-1 bg-gradient-to-r from-blue-600 to-green-600 px-6 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 transition"
+                            >
+                                Add {isBulk ? 'Keys' : 'Key'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

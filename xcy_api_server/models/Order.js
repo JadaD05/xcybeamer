@@ -4,17 +4,26 @@ const orderItemSchema = new mongoose.Schema({
     productId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Product',
-        // remove required for now
     },
-    productKeyId: {
+    productKeyId: {  // Keep for backward compatibility (single key)
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Product.keys',
-        // remove required for now
+        ref: 'ProductKey',
     },
+    productKeyIds: [{  // NEW: Array of key IDs for multiple quantities
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ProductKey'
+    }],
+    productKeys: [{  // NEW: Store full key details in webhook
+        id: mongoose.Schema.Types.ObjectId,
+        key: String,
+        keyType: String,
+        expiresAt: Date
+    }],
     name: { type: String, required: true },
     game: { type: String, required: true, index: true },
-    price: { type: Number, /* required: true */ }, // remove required
+    price: { type: Number },
     quantity: { type: Number, default: 1 },
+    keyType: { type: String, enum: ['1day', '1week', '1month'], default: '1day' }, // ADD THIS
 });
 
 const orderSchema = new mongoose.Schema({

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Gamepad2, Mail, MessageSquare, Send, MapPin, Clock, Phone } from 'lucide-react';
+import { Gamepad2, Mail, MessageSquare, Send, MapPin, Clock, Phone, MessageCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { isAuthenticated, getUser, logout } from '../utils/auth';
 
@@ -56,7 +56,7 @@ export default function Contact() {
         subject: '',
         message: ''
       });
-      
+
       // Hide success message after 5 seconds
       setTimeout(() => setSuccess(false), 5000);
     }, 1500);
@@ -101,6 +101,14 @@ export default function Contact() {
               <Link to="/products" className="hover:text-blue-400 transition">Products</Link>
               <Link to="/status" className="hover:text-blue-400 transition">Status</Link>
               <Link to="/support" className="hover:text-blue-400 transition">Support</Link>
+              <a
+                href="https://discord.gg/R95AHqwm5X"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-blue-400 transition"
+              >
+                Discord
+              </a>
               <Link to="/client" className="hover:text-blue-400 transition">Client</Link>
             </div>
 

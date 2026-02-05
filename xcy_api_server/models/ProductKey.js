@@ -13,6 +13,11 @@ const productKeySchema = new mongoose.Schema({
     ref: 'Product',
     required: true
   },
+  keyType: {
+    type: String,
+    enum: ['1day', '1week', '1month'],
+    required: true
+  },
   isSold: {
     type: Boolean,
     default: false
@@ -25,6 +30,10 @@ const productKeySchema = new mongoose.Schema({
   soldAt: {
     type: Date,
     default: null
+  },
+  expiresAt: {
+    type: Date,
+    default: null  // Set when key is sold
   },
   orderId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -43,5 +52,6 @@ const productKeySchema = new mongoose.Schema({
 
 // Index for faster queries
 productKeySchema.index({ productId: 1, isSold: 1 });
+productKeySchema.index({ productId: 1, keyType: 1, isSold: 1 });
 
 module.exports = mongoose.model('ProductKey', productKeySchema);

@@ -9,11 +9,22 @@ import axios from 'axios';
 export default function Cart() {
     const navigate = useNavigate();
     const user = isAuthenticated() ? getUser() : null;
-    const { cart, removeFromCart, clearCart, getCartTotal } = useCart();
+    const { cart, removeFromCart, updateQuantity, clearCart, getCartTotal } = useCart();
     const [promoCode, setPromoCode] = useState('');
     const [appliedPromo, setAppliedPromo] = useState(null);
     const [promoError, setPromoError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    if (!cart || !Array.isArray(cart)) {
+        return (
+            <div className="min-h-screen w-full bg-gray-950 text-white flex items-center justify-center">
+                <div className="text-center">
+                    <div className="text-6xl mb-4">⏳</div>
+                    <p className="text-gray-400">Loading cart...</p>
+                </div>
+            </div>
+        );
+    }
 
     const handleLogout = () => {
         logout();
@@ -78,29 +89,26 @@ export default function Cart() {
                     `${import.meta.env.VITE_API_URL}/product-keys/${item._id}/available`
                 );
 
-                if (!keyCheck.data.success || keyCheck.data.availableKeys < 1) {
-                    alert(`Sorry, ${item.name} is currently out of stock.`);
+                if (!keyCheck.data.success || keyCheck.data.availableKeys < item.quantity) {
+                    alert(`Sorry, ${item.name} doesn't have enough stock. Only ${keyCheck.data.availableKeys} available.`);
                     setLoading(false);
                     return;
                 }
             }
 
-            const subtotal = getCartTotal(); // already in dollars
+            const subtotal = getCartTotal();
             const discount = appliedPromo ? parseFloat(appliedPromo.discount) : 0;
             const total = subtotal - discount;
 
             // Prepare payload
             const payload = {
                 items: cart.map(item => {
-                    // Base price
                     let itemPrice = parseFloat(item.price);
 
-                    // Apply promo if exists
                     if (appliedPromo) {
                         if (appliedPromo.discountType === 'percentage') {
                             itemPrice = itemPrice * (1 - appliedPromo.discountValue / 100);
                         } else if (appliedPromo.discountType === 'fixed') {
-                            // Distribute fixed discount proportionally across items
                             const totalBeforeDiscount = subtotal;
                             const itemShare = itemPrice / totalBeforeDiscount;
                             itemPrice = itemPrice - itemShare * appliedPromo.discountValue;
@@ -111,7 +119,8 @@ export default function Cart() {
                         productId: item._id,
                         name: item.name,
                         game: item.game,
-                        price: parseFloat(itemPrice.toFixed(2)), // dollars
+                        keyType: item.keyType,
+                        price: parseFloat(itemPrice.toFixed(2)),
                         quantity: item.quantity || 1,
                         image: typeof item.image === 'string' ? item.image : ''
                     };
@@ -144,14 +153,8 @@ export default function Cart() {
                 return;
             }
 
-            // Clear cart and redirect to Stripe
             clearCart();
-
-            // Open in a new tab - DEV ONLY
             window.open(data.url, '_blank');
-
-            // PRODUCTION ONLY
-            // window.location.href = data.url;
 
         } catch (err) {
             console.error('Checkout error:', err);
@@ -251,14 +254,45 @@ export default function Cart() {
                                         <div className="flex-1">
                                             <h3 className="text-xl font-bold mb-1">{item.name}</h3>
                                             <p className="text-gray-400 text-sm mb-2">{item.game}</p>
-                                            <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-xs font-semibold">
-                                                {item.category}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-xs font-semibold">
+                                                    {item.category}
+                                                </span>
+                                                {/* Key Type Badge */}
+                                                <span className={`px-2 py-1 rounded text-xs font-semibold ${item.keyType === '1day' ? 'bg-orange-500/20 text-orange-400' :
+                                                        item.keyType === '1week' ? 'bg-blue-500/20 text-blue-400' :
+                                                            'bg-green-500/20 text-green-400'
+                                                    }`}>
+                                                    {item.keyType === '1day' ? '1 Day' :
+                                                        item.keyType === '1week' ? '1 Week' :
+                                                            '1month'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Quantity Controls */}
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => updateQuantity(item._id, (item.quantity || 1) - 1)}
+                                                className="bg-gray-700 hover:bg-gray-600 w-8 h-8 rounded-lg flex items-center justify-center transition font-bold"
+                                            >
+                                                -
+                                            </button>
+                                            <span className="text-lg font-semibold w-8 text-center">{item.quantity || 1}</span>
+                                            <button
+                                                onClick={() => updateQuantity(item._id, (item.quantity || 1) + 1)}
+                                                className="bg-gray-700 hover:bg-gray-600 w-8 h-8 rounded-lg flex items-center justify-center transition font-bold"
+                                            >
+                                                +
+                                            </button>
                                         </div>
 
                                         {/* Price */}
-                                        <div className="text-right">
-                                            <p className="text-2xl font-bold text-green-400">${item.price}</p>
+                                        <div className="text-right min-w-[100px]">
+                                            <p className="text-sm text-gray-400">${item.price} each</p>
+                                            <p className="text-2xl font-bold text-green-400">
+                                                ${(item.price * (item.quantity || 1)).toFixed(2)}
+                                            </p>
                                         </div>
 
                                         {/* Remove Button */}

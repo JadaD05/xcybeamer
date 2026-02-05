@@ -9,6 +9,7 @@ export default function SignUp() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(''); // Added success state
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -16,21 +17,12 @@ export default function SignUp() {
     confirmPassword: '',
     terms: false
   });
+  const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match!');
-      return;
-    }
-
-    if (!formData.terms) {
-      setError('Please accept the Terms of Service');
-      return;
-    }
-
+    setSuccess('');
     setLoading(true);
 
     try {
@@ -41,16 +33,37 @@ export default function SignUp() {
         confirmPassword: formData.confirmPassword
       });
 
-      // Save token to localStorage
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-
-      // Redirect to home or dashboard
-      navigate('/');
+      if (response.data.success) {
+        if (response.data.requiresVerification) {
+          setSuccess(response.data.message);
+          // Store token for limited access
+          if (response.data.token) {
+            localStorage.setItem('token', response.data.token);
+            localStorage.setItem('user', JSON.stringify(response.data.user));
+          }
+          setShowVerificationPrompt(true);
+        } else {
+          // For non-verified signups (if you disable verification)
+          localStorage.setItem('token', response.data.token);
+          localStorage.setItem('user', JSON.stringify(response.data.user));
+          navigate('/');
+        }
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      const res = await authAPI.resendVerification(formData.email);
+      if (res.data.success) {
+        alert('Verification email sent! Please check your inbox.');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to resend verification email');
     }
   };
 
@@ -85,6 +98,13 @@ export default function SignUp() {
         <div className="bg-gray-900/80 backdrop-blur-xl p-8 rounded-2xl border border-gray-800 shadow-2xl">
           <h1 className="text-3xl font-bold mb-2 text-center">Create Account</h1>
           <p className="text-gray-400 text-center mb-8">Join thousands of gamers today</p>
+
+          {/* Success Message */}
+          {success && (
+            <div className="bg-green-500/10 border border-green-500 text-green-500 px-4 py-3 rounded-lg mb-6">
+              {success}
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (
@@ -217,7 +237,7 @@ export default function SignUp() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !formData.terms}
               className="w-full bg-gradient-to-r from-blue-600 to-green-600 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 transition shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Creating Account...' : 'Create Account'}
@@ -233,6 +253,50 @@ export default function SignUp() {
           </p>
         </div>
       </div>
+
+      {/* Verification Prompt Modal */}
+      {showVerificationPrompt && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 p-8 rounded-2xl w-full max-w-md relative border border-gray-800">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Mail className="w-8 h-8 text-blue-400" />
+              </div>
+              <h2 className="text-2xl font-bold mb-4">Check Your Email!</h2>
+              <p className="text-gray-400 mb-6">
+                We've sent a verification link to <span className="text-blue-400">{formData.email}</span>.
+                Please click the link in the email to verify your account.
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setShowVerificationPrompt(false);
+                    navigate('/signin');
+                  }}
+                  className="w-full bg-gradient-to-r from-blue-600 to-green-600 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 transition"
+                >
+                  Go to Sign In
+                </button>
+                <button
+                  onClick={() => setShowVerificationPrompt(false)}
+                  className="w-full bg-gray-800 hover:bg-gray-700 py-3 rounded-lg font-semibold transition"
+                >
+                  Close
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mt-6">
+                Didn't receive the email? Check your spam folder or{' '}
+                <button
+                  onClick={handleResendVerification}
+                  className="text-blue-400 hover:text-blue-300 ml-1"
+                >
+                  resend verification email
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

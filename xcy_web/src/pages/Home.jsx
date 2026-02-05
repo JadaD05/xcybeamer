@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
-import { Shield, Zap, Users, Star, Menu, X, ChevronRight, Gamepad2, CheckCircle } from 'lucide-react';
-import { isAuthenticated, getUser, logout, isAdmin } from '../utils/auth';
+import { Shield, Zap, Users, Star, Menu, X, ChevronRight, Gamepad2, CheckCircle, MessageCircle } from 'lucide-react';
+import { isAuthenticated, getUser, logout } from '../utils/auth';
+
+const hasRole = (user, role) =>
+    Array.isArray(user?.roles) && user.roles.includes(role);
+
+const isAdminUser = (user) =>
+    hasRole(user, "admin") || hasRole(user, "dev");
 
 export default function Home() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -19,7 +25,10 @@ export default function Home() {
     useEffect(() => {
         if (isAuthenticated()) {
             const u = getUser();
-            setUser({ ...u, isAdmin: u.role === 'admin' });
+            setUser({
+                ...u,
+                isAdmin: isAdminUser(u),
+            });
         }
     }, []);
 
@@ -79,6 +88,14 @@ export default function Home() {
                             <a href="/products" className="hover:text-blue-400 transition">Products</a>
                             <a href="/status" className="hover:text-blue-400 transition">Status</a>
                             <a href="/support" className="hover:text-blue-400 transition">Support</a>
+                            <a
+                                href="https://discord.gg/R95AHqwm5X"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 hover:text-blue-400 transition"
+                            >
+                                Discord
+                            </a>
                             <Link
                                 to={user?.isAdmin ? "/admin" : "/client"}
                                 className="hover:text-blue-400 transition"
@@ -246,30 +263,6 @@ export default function Home() {
                                 </div>
                                 <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
                                 <p className="text-gray-400">{feature.description}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* Games Section */}
-            <section id="games" className="py-20 px-4">
-                <div className="max-w-7xl mx-auto">
-                    <h2 className="text-4xl md:text-5xl font-bold text-center mb-16">Supported Games</h2>
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {games.map((game, idx) => (
-                            <div key={idx} className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-xl border border-gray-700 hover:border-blue-500 transition">
-                                <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-xl font-bold">{game.name}</h3>
-                                    <span className="flex items-center gap-1 text-green-400 text-sm">
-                                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                                        {game.status}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-gray-400">
-                                    <Users className="w-4 h-4" />
-                                    <span>{game.users} active users</span>
-                                </div>
                             </div>
                         ))}
                     </div>

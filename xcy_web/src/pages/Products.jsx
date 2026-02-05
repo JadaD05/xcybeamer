@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Gamepad2, Shield, Zap, Users, Star, Search, Filter, ChevronRight, Check, ShoppingCart } from 'lucide-react';
+import { Gamepad2, Shield, Zap, Users, Star, Search, Filter, ChevronRight, Check, ShoppingCart, MessageCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { isAuthenticated, getUser, logout } from '../utils/auth';
 import { useCart } from '../context/CartContext';
 import axios from 'axios';
+
+const hasRole = (user, role) =>
+    Array.isArray(user?.roles) && user.roles.includes(role);
+
+const isAdminUser = (user) =>
+    hasRole(user, "admin") || hasRole(user, "dev");
 
 export default function Products() {
     const [selectedGame, setSelectedGame] = useState(null);
@@ -13,11 +19,16 @@ export default function Products() {
     const [user, setUser] = useState(null);
     const [categories, setCategories] = useState([]);
     const { addToCart, getCartCount } = useCart();
+    const [keyAvailability, setKeyAvailability] = useState({});
+    const [selectedKeyTypes, setSelectedKeyTypes] = useState({});
 
     useEffect(() => {
         if (isAuthenticated()) {
             const u = getUser();
-            setUser({ ...u, isAdmin: u.role === 'admin' }); // add isAdmin property
+            setUser({
+                ...u,
+                isAdmin: isAdminUser(u),
+            });
         }
     }, []);
 
@@ -58,18 +69,64 @@ export default function Products() {
         ? products.filter(p => p.game === selectedGame)
         : [];
 
+    useEffect(() => {
+        const fetchKeyAvailability = async () => {
+            if (!selectedGame) return;
+
+            const filtered = products.filter(p => p.game === selectedGame);
+            const availability = {};
+
+            await Promise.all(filtered.map(async (product) => {
+                try {
+                    const res = await axios.get(`${import.meta.env.VITE_API_URL}/product-keys/${product._id}/stats`);
+                    availability[product._id] = res.data.stats?.byType || { '1day': { available: 0 }, '1week': { available: 0 } };
+                } catch (err) {
+                    availability[product._id] = { '1day': { available: 0 }, '1week': { available: 0 } };
+                }
+            }));
+
+            setKeyAvailability(availability);
+        };
+
+        fetchKeyAvailability();
+    }, [selectedGame, products]);
+
     const handleLogout = () => {
         logout();
     };
 
     const handleAddToCart = (e, product) => {
-        e.preventDefault(); // Prevent navigation
-        const result = addToCart(product);
+        e.preventDefault();
+
+        // 🚫 Block anything that isn't Undetected
+        if (product.status !== "Undetected") {
+            alert(`❌ This product cannot be purchased while status is "${product.status}".`);
+            return;
+        }
+
+        const keyType = selectedKeyTypes[product._id] || '1day';
+
+        const price =
+            keyType === '1day' && product.pricing?.['1day'] ? product.pricing['1day'] :
+                keyType === '1week' && product.pricing?.['1week'] ? product.pricing['1week'] :
+                    product.price;
+
+        const result = addToCart({
+            ...product,
+            productId: product._id,
+            keyType,
+            price
+        });
+
         if (result.success) {
             alert('✅ Added to cart!');
         } else {
             alert(result.message);
         }
+    };
+
+    const handleBackToGames = () => {
+        setSelectedGame(null);
     };
 
     return (
@@ -90,6 +147,14 @@ export default function Products() {
                             <Link to="/products" className="text-blue-400">Products</Link>
                             <Link to="/status" className="hover:text-blue-400 transition">Status</Link>
                             <Link to="/support" className="hover:text-blue-400 transition">Support</Link>
+                            <a
+                                href="https://discord.gg/R95AHqwm5X"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 hover:text-blue-400 transition"
+                            >
+                                Discord
+                            </a>
                             <Link
                                 to={user?.isAdmin ? "/admin" : "/client"}
                                 className="hover:text-blue-400 transition"
@@ -212,6 +277,14 @@ export default function Products() {
             {selectedGame && (
                 <section className="px-4 pb-20">
                     <div className="max-w-7xl mx-auto">
+
+                        {/* Back Button — GOES HERE */}
+                        <button
+                            onClick={handleBackToGames}
+                            className="mb-6 inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 font-semibold transition"
+                        >
+                            ← Back to Games
+                        </button>
                         {loading ? (
                             <div className="text-center py-20">
                                 <div className="text-6xl mb-4">⏳</div>
@@ -299,7 +372,57 @@ export default function Products() {
                                             {/* Price & Buttons */}
                                             <div className="pt-4 border-t border-gray-700">
                                                 <div className="flex items-center justify-between mb-3">
-                                                    <span className="text-2xl font-bold">${product.price}</span>
+                                                    <span className="text-2xl font-bold">
+                                                        ${(() => {
+                                                            const type = selectedKeyTypes[product._id] || '1day';
+                                                            if (type === '1day' && product.pricing?.['1day']) return product.pricing['1day'].toFixed(2);
+                                                            if (type === '1week' && product.pricing?.['1week']) return product.pricing['1week'].toFixed(2);
+                                                            return parseFloat(product.price).toFixed(2);
+                                                        })()}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500">
+                                                        {(selectedKeyTypes[product._id] || '1day') === '1day' ? '1 Day' : '1 Week'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Key Type Selector */}
+                                                <div className="flex gap-2 mb-3">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setSelectedKeyTypes(prev => ({ ...prev, [product._id]: '1day' }));
+                                                        }}
+                                                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition ${(selectedKeyTypes[product._id] || '1day') === '1day'
+                                                            ? 'border-orange-500 bg-orange-500/10 text-orange-400'
+                                                            : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
+                                                            }`}
+                                                    >
+                                                        1 Day
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setSelectedKeyTypes(prev => ({ ...prev, [product._id]: '1week' }));
+                                                        }}
+                                                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition ${(selectedKeyTypes[product._id] || '1day') === '1week'
+                                                            ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                                                            : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
+                                                            }`}
+                                                    >
+                                                        1 Week
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setSelectedKeyTypes(prev => ({ ...prev, [product._id]: '1month' }));
+                                                        }}
+                                                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition ${(selectedKeyTypes[product._id] || '1day') === '1month'
+                                                            ? 'border-green-500 bg-green-500/10 text-green-400'
+                                                            : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
+                                                            }`}
+                                                    >
+                                                        1 Month
+                                                    </button>
                                                 </div>
 
                                                 <div className="flex gap-2">
@@ -311,12 +434,27 @@ export default function Products() {
                                                     </Link>
                                                     <button
                                                         onClick={(e) => handleAddToCart(e, product)}
-                                                        className="flex-1 bg-gradient-to-r from-blue-600 to-green-600 px-4 py-2 rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 transition flex items-center justify-center gap-2"
+                                                        disabled={
+                                                            product.status !== "Undetected" ||
+                                                            (keyAvailability[product._id]?.[(selectedKeyTypes[product._id] || '1day')]?.available || 0) === 0
+                                                        }
+                                                        className="flex-1 bg-gradient-to-r from-blue-600 to-green-600 px-4 py-2 rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         <ShoppingCart className="w-4 h-4" />
                                                         Add
                                                     </button>
                                                 </div>
+                                                {product.status !== "Undetected" ? (
+                                                    <p className="text-xs text-red-400 mt-2">
+                                                        Purchasing disabled while status is "{product.status}"
+                                                    </p>
+                                                ) : (
+                                                    (keyAvailability[product._id]?.[(selectedKeyTypes[product._id] || '1day')]?.available || 0) === 0 && (
+                                                        <p className="text-xs text-yellow-400 mt-2">
+                                                            No keys available for this license type.
+                                                        </p>
+                                                    )
+                                                )}
                                             </div>
                                         </div>
                                     </div>

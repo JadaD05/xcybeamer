@@ -36,6 +36,7 @@ const guideRoutes = require('./api/guides');
 const featureListRoutes = require('./api/featureLists');
 const promoCodeRoutes = require('./api/promoCodes');
 const userRoutes = require('./api/users');
+const twoFactorRoutes = require('./api/twoFactorAuth');
 
 // Routes
 app.use('/auth', require('./api/auth'));
@@ -50,6 +51,7 @@ app.use('/feature-lists', featureListRoutes);
 app.use('/promo-codes', promoCodeRoutes);
 app.use('/users', userRoutes);
 app.use("/stats", statsRoutes);
+app.use('/twofactor', twoFactorRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'XCY BEAMER API is running' });

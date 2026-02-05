@@ -12,7 +12,7 @@ export const getUser = () => {
 
 export const isAdmin = () => {
     const user = getUser();
-    return user && user.role === 'admin';
+    return user && Array.isArray(user.roles) && user.roles.includes('admin');
 };
 
 export const logout = () => {

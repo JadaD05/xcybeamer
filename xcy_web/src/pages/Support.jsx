@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Gamepad2, Search, HelpCircle, Book, MessageSquare, Mail, ChevronDown, ChevronUp } from 'lucide-react';
+import { Gamepad2, Search, HelpCircle, Book, MessageSquare, Mail, ChevronDown, ChevronUp, MessageCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { isAuthenticated, getUser, logout } from '../utils/auth';
+import { isAuthenticated, getUser, logout, isAdmin } from '../utils/auth';
 
 export default function Support() {
   const [user, setUser] = useState(null);
@@ -10,7 +10,8 @@ export default function Support() {
 
   useEffect(() => {
     if (isAuthenticated()) {
-      setUser(getUser());
+      const u = getUser();
+      setUser({ ...u, isAdmin: isAdmin() });
     }
   }, []);
 
@@ -100,7 +101,20 @@ export default function Support() {
               <Link to="/products" className="hover:text-blue-400 transition">Products</Link>
               <Link to="/status" className="hover:text-blue-400 transition">Status</Link>
               <Link to="/support" className="text-blue-400">Support</Link>
-              <Link to="/client" className="hover:text-blue-400 transition">Client</Link>
+              <a
+                href="https://discord.gg/R95AHqwm5X"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-blue-400 transition"
+              >
+                Discord
+              </a>
+              <Link
+                to={user?.isAdmin ? "/admin" : "/client"}
+                className="hover:text-blue-400 transition"
+              >
+                {user?.isAdmin ? "Admin" : "Client"}
+              </Link>
             </div>
 
             <div className="hidden md:block">

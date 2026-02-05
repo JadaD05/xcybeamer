@@ -3,14 +3,16 @@ const mongoose = require('mongoose');
 const router = express.Router();
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
 const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const ProductKey = require('../models/ProductKey');
 const PromoCode = require('../models/PromoCode');
-const { broadcastStats, getAllProductStats } = require('./stats');
 
 const FRONTEND_URL = process.env.FRONTEND_URL;
+
+const VALID_KEY_TYPES = ['1day', '1week', '1month'];
 
 // =========================
 // CREATE CHECKOUT SESSION
@@ -19,13 +21,13 @@ router.post('/create-session', async (req, res) => {
     try {
         const { items, userEmail, promoCode, subtotal, discount, total } = req.body;
 
-        console.log('Items:', items, 'Email:', userEmail, 'Promo:', promoCode);
+        console.log('Full request body:', req.body);
+        console.log('Subtotal:', subtotal, 'Discount:', discount, 'Total:', total);
 
-        if (!items || items.length === 0) {
+        if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: 'No items provided' });
         }
 
-        // Stripe minimum
         if (total < 0.50) {
             return res.status(400).json({
                 success: false,
@@ -33,22 +35,31 @@ router.post('/create-session', async (req, res) => {
             });
         }
 
-        // Create Stripe line items (prices already discounted)
+        // Validate keyTypes early
+        for (const item of items) {
+            if (!VALID_KEY_TYPES.includes(item.keyType)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid key type: ${item.keyType}`
+                });
+            }
+        }
+
         const line_items = items.map(item => ({
             price_data: {
                 currency: 'aud',
                 product_data: {
                     name: item.name,
                     images: [
-                        typeof item.image === "string" &&
-                            (item.image.startsWith("http") || item.image.startsWith("/"))
-                            ? `${FRONTEND_URL}${item.image.startsWith("/") ? "" : "/"}${item.image}`
+                        typeof item.image === 'string' &&
+                            (item.image.startsWith('http') || item.image.startsWith('/'))
+                            ? `${FRONTEND_URL}${item.image.startsWith('/') ? '' : '/'}${item.image}`
                             : `${FRONTEND_URL}/images/default.png`
-                    ],
+                    ]
                 },
-                unit_amount: Math.round(item.price * 100), // already includes discount
+                unit_amount: Math.round(item.price * 100)
             },
-            quantity: item.quantity || 1,
+            quantity: item.quantity || 1
         }));
 
         const session = await stripe.checkout.sessions.create({
@@ -56,13 +67,13 @@ router.post('/create-session', async (req, res) => {
             mode: 'payment',
             customer_email: userEmail,
             payment_method_types: ['card'],
-            success_url: `${FRONTEND_URL}/products`,
+            success_url: `${FRONTEND_URL}/client`,
             cancel_url: `${FRONTEND_URL}/cart`,
             metadata: {
                 promoCode: promoCode || '',
-                subtotal: subtotal.toFixed(2),
-                discount: discount.toFixed(2),
-                total: total.toFixed(2)
+                subtotal: (subtotal || 0).toFixed(2),
+                discount: (discount || 0).toFixed(2),
+                total: (total || 0).toFixed(2)
             }
         });
 
@@ -71,7 +82,6 @@ router.post('/create-session', async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        // Save order (NO backend price math)
         const itemsWithId = await Promise.all(items.map(async (item) => {
             const product = await Product.findById(item.productId);
             if (!product) throw new Error(`Product ${item.productId} not found`);
@@ -80,8 +90,9 @@ router.post('/create-session', async (req, res) => {
                 productId: product._id,
                 name: product.name,
                 game: product.game,
-                price: item.price, // ⭐ FIX: save what the customer actually paid
+                price: item.price,
                 quantity: item.quantity || 1,
+                keyType: item.keyType
             };
         }));
 
@@ -94,16 +105,15 @@ router.post('/create-session', async (req, res) => {
             promoCode: promoCode || null,
             total,
             sessionId: session.id,
-            paid: false,
+            paid: false
         });
 
         res.json({ success: true, url: session.url });
     } catch (error) {
-        console.error('Stripe error:', error);
+        console.error('Stripe session error:', error);
         res.status(500).json({ success: false, message: 'Payment session creation failed' });
     }
 });
-
 
 // =========================
 // STRIPE WEBHOOK
@@ -113,8 +123,8 @@ router.post(
     express.raw({ type: 'application/json' }),
     async (req, res) => {
         const sig = req.headers['stripe-signature'];
-
         let event;
+
         try {
             event = stripe.webhooks.constructEvent(
                 req.body,
@@ -136,54 +146,71 @@ router.post(
                 order.paid = true;
 
                 for (const item of order.items) {
+                    if (!VALID_KEY_TYPES.includes(item.keyType)) {
+                        console.error('Invalid keyType in order:', item.keyType);
+                        continue;
+                    }
+
                     const product = await Product.findById(item.productId);
-                    if (!product) {
-                        console.warn(`Product ${item.productId} not found`);
-                        continue;
+                    if (!product) continue;
+
+                    const quantity = item.quantity || 1;
+                    const assignedKeyIds = [];
+                    const now = new Date();
+
+                    for (let i = 0; i < quantity; i++) {
+                        const key = await ProductKey.findOne({
+                            productId: item.productId,
+                            keyType: item.keyType,
+                            isSold: false
+                        });
+
+                        if (!key) {
+                            console.warn(`No ${item.keyType} keys left for ${product.name}`);
+                            break;
+                        }
+
+                        if (item.keyType === '1day') {
+                            key.expiresAt = new Date(now.getTime() + 86400000);
+                        } else if (item.keyType === '1week') {
+                            key.expiresAt = new Date(now.getTime() + 604800000);
+                        } else if (item.keyType === '1month') {
+                            key.expiresAt = new Date(now.getTime() + 2592000000); // 30 days
+                        } else {
+                            key.expiresAt = null; // For any other key types
+                        }
+
+                        key.isSold = true;
+                        key.soldTo = order.userId;
+                        key.soldAt = now;
+                        key.orderId = order._id;
+                        await key.save();
+
+                        assignedKeyIds.push({
+                            id: key._id,
+                            key: key.key,
+                            keyType: key.keyType,
+                            expiresAt: key.expiresAt
+                        });
                     }
 
-                    // Find an unused key from ProductKey collection
-                    const availableKey = await ProductKey.findOne({
-                        productId: item.productId,
-                        isSold: false
-                    });
+                    item.productKeys = assignedKeyIds;
 
-                    if (!availableKey) {
-                        console.warn(`No available keys for product ${product.name}`);
-                        continue;
-                    }
-
-                    availableKey.isSold = true;
-                    availableKey.soldTo = order.userId;
-                    availableKey.soldAt = new Date();
-                    availableKey.orderId = order._id;
-                    await availableKey.save();
-
-                    // Mark the key as used and assign it to order
-                    availableKey.used = true;
-                    await availableKey.save();
-
-                    item.productKeyId = availableKey._id;
-
-                    // Increment product purchases
-                    product.purchases = (product.purchases || 0) + item.quantity;
+                    product.purchases = (product.purchases || 0) + quantity;
                     await product.save();
                 }
 
+                order.markModified('items');
                 await order.save();
 
-                // Increment promo code usage if one was used
                 if (order.promoCode) {
                     await PromoCode.findOneAndUpdate(
                         { code: order.promoCode.toUpperCase() },
                         { $inc: { usedCount: 1 } }
                     );
-                    console.log('Promo code usage incremented:', order.promoCode);
                 }
-
-                await broadcastStats(req.app.get('io'));
-            } catch (dbErr) {
-                console.error('Database update error:', dbErr);
+            } catch (err) {
+                console.error('Order fulfillment error:', err);
             }
         }
 

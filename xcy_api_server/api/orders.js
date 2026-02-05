@@ -110,30 +110,44 @@ router.get('/my-orders', authenticateToken, async (req, res) => {
 // @route   GET /api/orders/my-keys
 // @desc    Get current user's product keys
 // @access  Private
+// Get user's license keys
 router.get('/my-keys', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const orders = await Order.find({
+      userId: req.user.userId,
+      paid: true
+    });
 
-    const keys = await ProductKey.find({ soldTo: userId })
-      .populate('productId', 'name game')
-      .sort({ soldAt: -1 });
+    const keys = [];
 
-    const formattedKeys = keys.map(k => ({
-      licenseKey: k.key,
-      productName: k.productId ? k.productId.name : 'Unknown Product',
-      productGame: k.productId ? k.productId.game : '',
-      soldAt: k.soldAt
-    }));
+    orders.forEach(order => {
+      order.items.forEach(item => {
+        // NEW FORMAT: productKeys array (embedded key details from webhook)
+        if (item.productKeys && item.productKeys.length > 0) {
+          item.productKeys.forEach(keyObj => {
+            keys.push({
+              productName: item.name,
+              game: item.game,
+              licenseKey: keyObj.key,
+              keyType: keyObj.keyType,
+              expiresAt: keyObj.expiresAt,
+              soldAt: order.createdAt,
+              orderId: order._id.toString()
+            });
+          });
+        }
+      });
+    });
 
     res.json({
       success: true,
-      keys: formattedKeys
+      keys: keys
     });
-  } catch (error) {
-    console.error('Get keys error:', error);
+  } catch (err) {
+    console.error('Error fetching keys:', err);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error fetching license keys'
     });
   }
 });

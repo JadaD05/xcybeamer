@@ -13,8 +13,15 @@ import {
   Menu,
   X,
   ChevronRight,
+  MessageCircle
 } from "lucide-react";
 import { isAuthenticated, getUser, logout } from "../utils/auth";
+
+const hasRole = (user, role) =>
+  Array.isArray(user?.roles) && user.roles.includes(role);
+
+const isAdminUser = (user) =>
+  hasRole(user, "admin") || hasRole(user, "dev");
 
 const STATUS_META = {
   Undetected: {
@@ -73,6 +80,16 @@ export default function Status() {
   const [scrolled, setScrolled] = useState(false);
   const [user, setUser] = useState(null);
 
+  useEffect(() => {
+    if (isAuthenticated()) {
+      const u = getUser();
+      setUser({
+        ...u,
+        isAdmin: isAdminUser(u),
+      });
+    }
+  }, []);
+
   // Fetch products
   useEffect(() => {
     const loadProducts = async () => {
@@ -95,11 +112,6 @@ export default function Status() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Auth detection
-  useEffect(() => {
-    if (isAuthenticated()) setUser(getUser());
-  }, []);
-
   const handleLogout = () => {
     logout();
     setUser(null);
@@ -109,9 +121,8 @@ export default function Status() {
     <div className="min-h-screen w-full bg-gray-950 text-white overflow-x-hidden">
       {/* Navigation */}
       <nav
-        className={`fixed w-full z-50 transition-all duration-300 ${
-          scrolled ? "bg-gray-900/95 backdrop-blur-lg shadow-lg" : "bg-transparent"
-        }`}
+        className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? "bg-gray-900/95 backdrop-blur-lg shadow-lg" : "bg-transparent"
+          }`}
       >
         <div className="w-full px-8 lg:px-16">
           <div className="flex justify-between items-center h-16">
@@ -136,9 +147,20 @@ export default function Status() {
               <a href="/support" className="hover:text-blue-400 transition">
                 Support
               </a>
-              <a href="/client" className="hover:text-blue-400 transition">
-                Client
+              <a
+                href="https://discord.gg/R95AHqwm5X"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-blue-400 transition"
+              >
+                Discord
               </a>
+              <Link
+                to={user?.isAdmin ? "/admin" : "/client"}
+                className="hover:text-blue-400 transition"
+              >
+                {user?.isAdmin ? "Admin" : "Client"}
+              </Link>
             </div>
 
             <div className="hidden md:block">

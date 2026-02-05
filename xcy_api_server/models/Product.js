@@ -17,7 +17,12 @@ const productSchema = new mongoose.Schema({
   },
   price: {
     type: Number,
-    required: true
+    required: true  // This is now the 1 Month price
+  },
+  pricing: {
+    '1month': { type: Number, default: null },  // Falls back to `price` if null
+    '1day': { type: Number, default: null },
+    '1week': { type: Number, default: null }
   },
   downloadUrl: {
     type: String,
@@ -50,5 +55,13 @@ const productSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+// Helper to get price for a key type, falls back to base price
+productSchema.methods.getPriceForKeyType = function(keyType) {
+  if (this.pricing && this.pricing[keyType]) {
+    return this.pricing[keyType];
+  }
+  return this.price; // fallback to 1 Month/base price
+};
 
 module.exports = mongoose.model('Product', productSchema);

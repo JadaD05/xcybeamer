@@ -7,9 +7,10 @@ import {
     BookOpen,
     ChevronRight,
     FileText,
-    Lock
+    Lock,
+    MessageCircle
 } from "lucide-react";
-import { isAuthenticated, getUser, logout } from "../utils/auth";
+import { isAuthenticated, getUser, logout, isAdmin } from "../utils/auth";
 import { orderAPI, guideAPI } from "../utils/api";
 
 export default function Documents() {
@@ -85,6 +86,12 @@ export default function Documents() {
 
     // Filter docs to only show games the user has purchased
     const getAvailableDocs = () => {
+        // Admins see all guides
+        if (isAdmin()) {
+            return allDocs;
+        }
+
+        // Clients: only purchased games
         const available = {};
         purchasedProducts.forEach(product => {
             const game = product.game;
@@ -92,6 +99,7 @@ export default function Documents() {
                 available[game] = allDocs[game];
             }
         });
+
         return available;
     };
 
@@ -121,7 +129,20 @@ export default function Documents() {
                             <Link to="/products" className="hover:text-blue-400 transition">Products</Link>
                             <Link to="/status" className="hover:text-blue-400 transition">Status</Link>
                             <Link to="/support" className="text-blue-400">Support</Link>
-                            <Link to="/client" className="hover:text-blue-400 transition">Client</Link>
+                            <a
+                                href="https://discord.gg/R95AHqwm5X"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 hover:text-blue-400 transition"
+                            >
+                                Discord
+                            </a>
+                            <Link
+                                to={isAdmin() ? "/admin" : "/client"}
+                                className="hover:text-blue-400 transition"
+                            >
+                                {isAdmin() ? "Admin" : "Client"}
+                            </Link>
                         </div>
 
                         <div className="hidden md:block">
