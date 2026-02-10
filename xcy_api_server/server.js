@@ -12,7 +12,7 @@ connectDB();
 
 // CORS
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://192.168.15.90:5173', 'https://xcybeamer.com', 'https://*.xcybeamer.com'], // your LAN IP + localhost
+  origin: ['http://localhost:5173', 'http://192.168.51.90:5173', 'https://xcybeamer.com', 'https://*.xcybeamer.com'], // your LAN IP + localhost
   methods: ["GET","POST","PUT","DELETE"],
   credentials: true
 }));

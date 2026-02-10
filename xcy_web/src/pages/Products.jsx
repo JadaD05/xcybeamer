@@ -336,18 +336,6 @@ export default function Products() {
                                                     </span>
                                                 </div>
 
-                                                {/* Rating & Users */}
-                                                <div className="flex items-center gap-4 mb-4 text-sm">
-                                                    <div className="flex items-center gap-1 text-yellow-400">
-                                                        <Star className="w-4 h-4 fill-current" />
-                                                        <span className="font-semibold">{product.rating}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-1 text-gray-400">
-                                                        <Users className="w-4 h-4" />
-                                                        <span>{product.users} users</span>
-                                                    </div>
-                                                </div>
-
                                                 {/* Features */}
                                                 <div className="mb-4">
                                                     <p className="text-xs text-gray-400 mb-2 font-semibold">FEATURES</p>

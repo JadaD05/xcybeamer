@@ -224,13 +224,6 @@ export default function Home() {
                                 >
                                     Browse Products <ChevronRight className="w-5 h-5" />
                                 </Link>
-
-                                <a
-                                    href="#games"
-                                    className="border-2 border-green-500 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-green-500/10 transition inline-flex items-center justify-center"
-                                >
-                                    View Supported Games
-                                </a>
                             </>
                         ) : (
                             <>

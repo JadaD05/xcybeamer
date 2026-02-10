@@ -195,24 +195,6 @@ export default function ProductDetail() {
                                 <span className="font-semibold">{product.status}</span>
                             </div>
 
-                            {/* Stats */}
-                            <div className="grid grid-cols-2 gap-4 mb-6">
-                                <div className="bg-gray-800/50 rounded-lg p-4 text-center">
-                                    <div className="flex items-center justify-center gap-1 text-yellow-400 mb-1">
-                                        <Star className="w-5 h-5 fill-current" />
-                                        <span className="font-bold text-lg">{product.rating}</span>
-                                    </div>
-                                    <p className="text-xs text-gray-400">Rating</p>
-                                </div>
-                                <div className="bg-gray-800/50 rounded-lg p-4 text-center">
-                                    <div className="flex items-center justify-center gap-1 text-blue-400 mb-1">
-                                        <Users className="w-5 h-5" />
-                                        <span className="font-bold text-lg">{product.users}</span>
-                                    </div>
-                                    <p className="text-xs text-gray-400">Active Users</p>
-                                </div>
-                            </div>
-
                             {/* Key Type Selector */}
                             <div className="flex gap-2 mb-4">
                                 {['1day', '1week', '1month'].map(type => (
