@@ -1,12 +1,3 @@
-# Environment Variables
-.env
-.env.local
-.env.development
-.env.production
-.env.test
-*/.env
-**/.env
-
 # Docker
 docker-compose.override.yml
 
