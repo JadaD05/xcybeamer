@@ -110,34 +110,89 @@ router.get('/my-orders', authenticateToken, async (req, res) => {
 // @route   GET /api/orders/my-keys
 // @desc    Get current user's product keys
 // @access  Private
-// Get user's license keys
 router.get('/my-keys', authenticateToken, async (req, res) => {
   try {
+    // Populate all references to get full key details
     const orders = await Order.find({
       userId: req.user.userId,
       paid: true
-    });
+    })
+      .populate('items.productKeyId')  // Single key reference
+      .populate('items.productKeyIds') // Multiple keys reference
+      .populate({
+        path: 'items.productId',
+        select: 'name game' // Only get necessary fields from Product
+      });
 
     const keys = [];
 
-    orders.forEach(order => {
-      order.items.forEach(item => {
-        // NEW FORMAT: productKeys array (embedded key details from webhook)
+    for (const order of orders) {
+      for (const item of order.items) {
+        // 1. Check productKeys array (webhook format)
         if (item.productKeys && item.productKeys.length > 0) {
           item.productKeys.forEach(keyObj => {
             keys.push({
               productName: item.name,
               game: item.game,
               licenseKey: keyObj.key,
-              keyType: keyObj.keyType,
+              keyType: keyObj.keyType || item.keyType,
               expiresAt: keyObj.expiresAt,
               soldAt: order.createdAt,
-              orderId: order._id.toString()
+              orderId: order._id.toString(),
+              source: 'productKeys array'
             });
           });
         }
-      });
-    });
+
+        // 2. Check productKeyIds array (multiple keys)
+        if (item.productKeyIds && item.productKeyIds.length > 0) {
+          for (const keyDoc of item.productKeyIds) {
+            if (keyDoc && keyDoc.key) {
+              keys.push({
+                productName: item.name,
+                game: item.game,
+                licenseKey: keyDoc.key,
+                keyType: keyDoc.keyType || item.keyType,
+                expiresAt: keyDoc.expiresAt,
+                soldAt: order.createdAt,
+                orderId: order._id.toString(),
+                source: 'productKeyIds array'
+              });
+            }
+          }
+        }
+
+        // 3. Check productKeyId (single key - backward compatibility)
+        if (item.productKeyId && item.productKeyId.key) {
+          keys.push({
+            productName: item.name,
+            game: item.game,
+            licenseKey: item.productKeyId.key,
+            keyType: item.productKeyId.keyType || item.keyType,
+            expiresAt: item.productKeyId.expiresAt,
+            soldAt: order.createdAt,
+            orderId: order._id.toString(),
+            source: 'productKeyId single'
+          });
+        }
+
+        // 4. Check if key is directly on item (legacy format)
+        if (item.licenseKey) {
+          keys.push({
+            productName: item.name,
+            game: item.game,
+            licenseKey: item.licenseKey,
+            keyType: item.keyType,
+            expiresAt: item.expiresAt,
+            soldAt: order.createdAt,
+            orderId: order._id.toString(),
+            source: 'item.licenseKey'
+          });
+        }
+      }
+    }
+
+    console.log(`Found ${keys.length} keys for user ${req.user.userId}`);
 
     res.json({
       success: true,
