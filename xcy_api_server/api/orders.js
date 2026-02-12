@@ -118,7 +118,7 @@ router.get('/my-keys', authenticateToken, async (req, res) => {
     console.log('Order collection namespace:', Order.collection.namespace); // "database_name.orders"
     // Populate all references to get full key details
     const orders = await Order.find({
-      userId: req.user.userId,
+      userId: req.user._id,
       paid: true
     })
       .populate('items.productKeyId')  // Single key reference
