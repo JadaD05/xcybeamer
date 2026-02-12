@@ -112,6 +112,10 @@ router.get('/my-orders', authenticateToken, async (req, res) => {
 // @access  Private
 router.get('/my-keys', authenticateToken, async (req, res) => {
   try {
+    console.log('=== COLLECTION INFO ===');
+    console.log('Order model name:', Order.modelName); // "Order"
+    console.log('Order collection name:', Order.collection.collectionName); // "orders"
+    console.log('Order collection namespace:', Order.collection.namespace); // "database_name.orders"
     // Populate all references to get full key details
     const orders = await Order.find({
       userId: req.user.userId,
