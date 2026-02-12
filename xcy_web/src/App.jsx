@@ -15,6 +15,8 @@ import Status from "./pages/Status";
 import Cart from './pages/Cart';
 import Profile from './pages/Profile';
 import VerifyEmail from './pages/VerifyEmail';
+import OrdersPage from './pages/OrdersPage';
+import ProductKeysPage from "./pages/ProductKeysPage";
 
 function App() {
   return (
@@ -30,11 +32,12 @@ function App() {
         <Route path="/client" element={<Client />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/status" element={<Status />} />
-        <Route path="/cart" element={<Cart />} />
-        <Route path="/key-management" element={<KeyManagement />} />
+        <Route path="/cart" element={<Cart />} />\
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/orders" element={<OrdersPage />} />
+        <Route path="/product-keys" element={<ProductKeysPage />} />
       </Routes>
     </CartProvider>
   );

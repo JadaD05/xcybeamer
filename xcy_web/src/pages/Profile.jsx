@@ -525,14 +525,6 @@ export default function Profile() {
                                     </button>
 
                                     <button
-                                        onClick={() => navigate('/downloads')}
-                                        className="w-full text-left p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition flex items-center justify-between"
-                                    >
-                                        <span>Downloads</span>
-                                        <span className="text-blue-400">→</span>
-                                    </button>
-
-                                    <button
                                         onClick={handleLogout}
                                         className="w-full text-left p-3 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition flex items-center justify-between text-red-400"
                                     >
