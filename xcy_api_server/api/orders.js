@@ -196,7 +196,7 @@ router.get('/my-keys', authenticateToken, async (req, res) => {
       }
     }
 
-    console.log(`Found ${keys.length} keys for user ${req.user.userId}`);
+    console.log(`Found ${keys.length} keys for user ${req.user._id}`);
 
     res.json({
       success: true,
