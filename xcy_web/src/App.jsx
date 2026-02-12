@@ -15,8 +15,8 @@ import Status from "./pages/Status";
 import Cart from './pages/Cart';
 import Profile from './pages/Profile';
 import VerifyEmail from './pages/VerifyEmail';
-import OrdersPage from './pages/OrdersPage';
-import ProductKeysPage from "./pages/ProductKeysPage";
+import OrdersPage from './pages/OrdersPage.jsx';
+import ProductKeysPage from "./pages/ProductKeysPage.jsx";
 
 function App() {
   return (
