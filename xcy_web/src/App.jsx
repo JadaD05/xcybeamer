@@ -37,7 +37,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/orders" element={<OrdersPage />} />
-        <Route path="/product-keys" element={<ProductKeysPage />} />
+        <Route path="/keys" element={<ProductKeysPage />} />
       </Routes>
     </CartProvider>
   );
